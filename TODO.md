@@ -2,14 +2,14 @@
 
 ## Foundation
 
-- [ ] Configurar Prisma e Client (`prisma init`, `.env`, `schema.prisma`)
-- [ ] Criar migração inicial **com** extensão `citext` (placa case-insensitive)
-- [ ] Rodar `npx prisma migrate dev` e validar no Beekeeper
-- [ ] Preparar seed básico (1 usuário fake, 1 veículo, 2 despesas)
+- [x] Configurar Prisma e Client (`prisma init`, `.env`, `schema.prisma`)
+- [x] Criar migração inicial **com** extensão `citext` (placa case-insensitive)
+- [x] Rodar `npx prisma migrate dev` e validar no Beekeeper
+- [x] Preparar seed básico (1 usuário fake, 1 veículo, 2 despesas)
 
 ## UI/UX (Mobile-first)
 
-- [ ] Definir layout base mobile (topbar + lista)
+- [x] Definir layout base mobile (topbar + lista)
 - [ ] Criar componentes: `PageHeader`, `Card`, `EmptyState`
 - [ ] Aplicar paleta dark com CSS variables e utilitários
 - [ ] Estados de carregamento e erro acessíveis
@@ -46,14 +46,14 @@
 ## Hooks (reutilizáveis)
 
 - [ ] `useMobile` (breakpoints responsivos)
-- [ ] `useVehicles` (fetch + cache + filtros)
-- [ ] `useExpenses` (fetch + paginação + filtros)
-- [ ] `useUpload` (estado de upload, progresso, erro)
-- [ ] `useToast` (feedback de sucesso/erro padronizado)
+- [x] `useVehicles` (fetch + cache + filtros)
+- [x] `useExpenses` (fetch + paginação + filtros)
+- [x] `useUpload` (estado de upload, progresso, erro)
+- [x] `useToast` (feedback de sucesso/erro padronizado)
 
 ## Acesso a Dados
 
-- [ ] Rotas de API em **App Router** (`/api/vehicles`, `/api/expenses`, `/api/attachments`)
+- [x] Rotas de API em **App Router** (`/api/vehicles`, `/api/expenses`, `/api/attachments`)
 - [ ] Server Actions para criar/editar/remover (com Auth)
 - [ ] Regras de autorização (somente dono acessa seus dados)
 
