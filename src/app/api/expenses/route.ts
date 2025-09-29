@@ -87,6 +87,11 @@ export async function POST(request: Request) {
       station,
     } = parsed.data;
 
+    // attachments opcionais vindos do client (não fazem parte do schema zod principal)
+    const attachments = Array.isArray((json as any).attachments)
+      ? (json as any).attachments
+      : [];
+
     // Garantir que o veículo pertence ao usuário
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: vehicleId },
@@ -109,6 +114,15 @@ export async function POST(request: Request) {
         pricePerLiter: pricePerLiter ?? null,
         fuelType: fuelType ?? null,
         station: station ?? null,
+        ...(attachments.length && {
+          attachments: {
+            create: attachments.map((a: any) => ({
+              url: a.url,
+              contentType: a.contentType ?? null,
+              size: typeof a.size === "number" ? a.size : null,
+            })),
+          },
+        }),
       },
     });
 
