@@ -1,0 +1,172 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Tipos de despesas possíveis (ajuda a categorizar relatórios e filtros)
+enum ExpenseType {
+  ABASTECIMENTO // combustível
+  MANUTENCAO    // revisões, peças, serviços mecânicos
+  IMPOSTO       // IPVA, licenciamento
+  SEGURO        // seguro do veículo
+  MULTA         // multas de trânsito
+  OUTRO         // qualquer despesa que não se encaixe acima
+}
+
+/// Situação de pagamento da despesa
+enum ExpenseStatus {
+  PAGO      // já quitada
+  PENDENTE  // ainda não paga
+}
+
+/// Tipo de combustível usado em um abastecimento específico
+enum FuelType {
+  GASOLINA
+  ETANOL
+  DIESEL
+  GNV
+}
+
+/// Tipo de combustível padrão do veículo (ex.: FLEX permite gasolina/etanol)
+enum VehicleFuel {
+  GASOLINA
+  ETANOL
+  DIESEL
+  GNV
+  FLEX
+}
+
+/// Usuário da aplicação (dono de veículos, despesas e sessões de login)
+model User {
+  id           String    @id @default(uuid())     // identificador único (UUID v4)
+  email        String    @unique                  // e-mail único para login
+  name         String?                          // nome de exibição (opcional)
+  image        String?                          // URL do avatar (opcional)
+  passwordHash String?                          // hash de senha (se usar Credentials)
+  createdAt    DateTime  @default(now())         // data/hora de criação
+  updatedAt    DateTime  @updatedAt              // atualiza automaticamente a cada update
+
+  // Relacionamentos de domínio
+  vehicles     Vehicle[]                         // 1:N -> veículos do usuário
+  expenses     Expense[]                         // 1:N -> despesas do usuário
+
+  // Tabelas do Auth.js / NextAuth (para logins e sessões)
+  accounts     Account[]                         // contas externas (Google, etc.)
+  sessions     Session[]                         // sessões (se usar strategy database)
+}
+
+/// Conta conectada de provedor (OAuth etc.) — compatível com Auth.js
+model Account {
+  id                String  @id @default(cuid())  // id interno da conta
+  userId            String                         // FK para User.id (dono)
+  type              String                         // "oauth" | "oidc" | "email" | ...
+  provider          String                         // ex.: "google", "github"
+  providerAccountId String                         // id do usuário no provedor
+
+  // Tokens (muitos podem ser grandes, por isso TEXT)
+  refresh_token     String? @db.Text              // refresh token
+  access_token      String? @db.Text              // access token
+  expires_at        Int?                          // unix epoch (segundos) de expiração
+  token_type        String?                       // ex.: "bearer"
+  scope             String?                       // escopos concedidos
+  id_token          String? @db.Text              // id_token (OIDC)
+  session_state     String?                       // estado de sessão do provedor
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])         // evita duplicidades por provedor
+}
+
+/// Sessão persistida (Auth.js com session.strategy = "database")
+model Session {
+  id           String   @id @default(cuid())      // id interno da sessão
+  sessionToken String   @unique                   // token salvo no cookie
+  userId       String                              // FK para User.id
+  expires      DateTime                           // quando expira a sessão
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Token de verificação (e-mail magic link, reset de senha, etc.)
+model VerificationToken {
+  identifier String                                // alvo da verificação (e-mail)
+  token      String   @unique                      // token único enviado
+  expires    DateTime                              // validade do token
+
+  @@unique([identifier, token])                    // garante unicidade do par
+}
+
+/// Veículo do usuário
+model Vehicle {
+  id          String      @id @default(uuid())     // identificador único
+  userId      String                                  // FK -> User.id (dono)
+  nickname    String?                                 // apelido (ex.: "Golzinho")
+  plate       String?     @db.Citext                 // placa em CITEXT (case-insensitive)
+  odometerKm  Int?                                     // hodômetro atual (km)
+  fuelDefault VehicleFuel?                            // combustível padrão (ex.: FLEX)
+  createdAt   DateTime    @default(now())            // criado em
+  updatedAt   DateTime    @updatedAt                 // atualizado em
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expenses    Expense[]                               // despesas vinculadas ao veículo
+
+  @@index([userId])                                   // acelera consultas por dono
+  @@unique([userId, plate])                           // placa única por usuário
+}
+
+/// Despesa (genérica; especializamos abastecimento com campos opcionais)
+model Expense {
+  id            String         @id @default(uuid())   // identificador único
+  userId        String                                   // FK -> User.id (dono)
+  vehicleId     String                                   // FK -> Vehicle.id (associação)
+  type          ExpenseType                               // tipo da despesa
+  status        ExpenseStatus  @default(PENDENTE)        // situação do pagamento
+
+  date          DateTime       @db.Date                  // data (sem horário) da despesa
+
+  // Valores (usamos Decimal para evitar erros de ponto flutuante)
+  amount        Decimal        @db.Decimal(12, 2)        // valor total (R$)
+  description   String                                    // descrição livre
+  km            Int?                                       // km do hodômetro no momento da despesa
+
+  // Campos específicos de abastecimento (preenchidos apenas quando type = ABASTECIMENTO)
+  fuelLiters    Decimal?       @db.Decimal(8, 2)         // litros abastecidos (2 casas)
+  pricePerLiter Decimal?       @db.Decimal(10, 2)        // preço por litro (2 casas)
+  fuelType      FuelType?                                 // tipo de combustível abastecido
+  station       String?                                    // posto onde abasteceu
+
+  createdAt     DateTime       @default(now())            // criado em
+  updatedAt     DateTime       @updatedAt                 // atualizado em
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle       Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  attachments   ExpenseAttachment[]                       // anexos (nota fiscal, foto do serviço)
+
+  @@index([userId, date])                                 // filtros por usuário e período
+  @@index([vehicleId, date])                              // filtros por veículo e período
+  @@index([type])                                         // filtros por categoria
+}
+
+/// Anexos de uma despesa (armazenaremos a URL do Cloudinary)
+model ExpenseAttachment {
+  id          String   @id @default(uuid())        // identificador único
+  expenseId   String                                 // FK -> Expense.id
+  url         String   @db.Text                      // URL absoluta (Cloudinary)
+  contentType String?                                // MIME (ex.: image/jpeg, application/pdf)
+  size        Int?                                   // tamanho em bytes (opcional)
+  createdAt   DateTime @default(now())               // criado em
+
+  expense     Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])                               // consultas por despesa
+}

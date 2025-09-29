@@ -1,26 +1,178 @@
 @import "tailwindcss";
 
+/* 
+  === GarageTrack · Design Tokens (Dark-first) ===
+  Termo rápido:
+  - "Design tokens": variáveis centrais de cor/tipo que garantem consistência visual.
+  A ideia é definir tudo no :root (dark como padrão) e mapear para o Tailwind via @theme inline.
+*/
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* --- Paleta principal (dark) --- */
+  --bg: #0b0f14; /* fundo global */
+  --panel: #0f172a; /* painéis (ex.: containers, modais) - slate-900 */
+  --surface: #111827; /* superfícies (cards) - gray-900 */
+  --text: #e5e7eb; /* texto padrão - gray-200 */
+  --muted: #94a3b8; /* texto secundário - slate-400 */
+  --border: rgba(255, 255, 255, 0.08); /* borda sutil */
+
+  --accent: #22d3ee; /* ação primária - cyan-400 */
+  --accent-hover: #06b6d4; /* hover do primário - cyan-500 */
+
+  --success: #34d399; /* feedback positivo */
+  --warning: #f59e0b; /* atenção/alerta */
+  --danger: #f87171; /* erro/perigo */
+
+  /* --- Aliases legados (mantidos para compatibilidade) --- */
+  --background: var(--bg); /* mantém variáveis que você já usava */
+  --foreground: var(--text);
+
+  /* --- Tipografia (mantém as fontes que você já definiu no @theme) --- */
+  /* --font-geist-sans / --font-geist-mono devem ser definidas no layout se usadas */
 }
 
+/* 
+  Mapeia tokens para o sistema de cores do Tailwind v4.
+  Termo rápido:
+  - "@theme inline": forma do Tailwind v4 de ler variáveis CSS como tema utilitário.
+*/
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  /* Cores semânticas úteis como tokens Tailwind (ex.: text-muted, bg-panel, etc.) */
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-surface: var(--surface);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
+/* 
+  Tema claro opcional (automático por preferência do sistema).
+  Como padrão é dark, aqui apenas trocamos para tons claros quando necessário.
+*/
+@media (prefers-color-scheme: light) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #ffffff;
+    --panel: #f7fafc; /* painel claro suave */
+    --surface: #ffffff; /* superfícies claras */
+    --text: #171717; /* texto escuro */
+    --muted: #6b7280; /* cinza médio */
+    --border: rgba(0, 0, 0, 0.08);
+
+    --accent: #0891b2; /* cyan-700 no claro para contraste */
+    --accent-hover: #0e7490;
+
+    --success: #16a34a;
+    --warning: #d97706;
+    --danger: #dc2626;
+
+    --background: var(--bg);
+    --foreground: var(--text);
   }
 }
 
+/* 
+  Base global
+  Termo rápido:
+  - "OKLCH/OKLAB": espaços de cor modernos; usamos abaixo color-mix(in oklab, ...) para blends suaves.
+*/
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-geist-sans, Arial, Helvetica, sans-serif);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Seleção de texto com leve destaque do accent */
+::selection {
+  background: color-mix(in oklab, var(--accent) 30%, transparent);
+  color: var(--text);
+}
+
+/* 
+  Utilitários de superfície “glass” e borda sutil.
+  Termo rápido:
+  - “Glass”: efeito translúcido leve que dá profundidade sem poluir visual.
+*/
+.panel {
+  background: color-mix(in oklab, #ffffff 5%, transparent); /* glass leve */
+  border: 1px solid color-mix(in oklab, #ffffff 10%, transparent); /* borda sutil */
+  box-shadow: 0 0 0 1px color-mix(in oklab, #ffffff 5%, transparent) inset,
+    0 10px 30px -10px color-mix(in oklab, #000 50%, transparent); /* profundidade */
+  border-radius: 1rem;
+}
+
+.surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  box-shadow: 0 0 0 1px color-mix(in oklab, #ffffff 4%, transparent) inset,
+    0 6px 20px -8px color-mix(in oklab, #000 55%, transparent);
+}
+
+/* Borda sutil reutilizável (pode combinar com classes Tailwind) */
+.border-subtle {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+/* Botão primário semântica base (você pode usar Tailwind junto) */
+.button-primary {
+  background: var(--accent);
+  color: #001016; /* contraste OK no cyan */
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, #000 70%);
+  padding: 0.625rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  transition: transform 0.06s ease, background 0.15s ease, box-shadow 0.2s ease;
+}
+.button-primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px -12px color-mix(in oklab, var(--accent) 70%, transparent);
+}
+.button-primary:active {
+  transform: translateY(0);
+}
+
+/* Estados de foco visíveis e acessíveis */
+:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+/* Scrollbar sutil (apenas navegadores que suportam) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 25%, transparent)
+    color-mix(in oklab, var(--bg) 85%, var(--panel) 15%);
+}
+*::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: color-mix(in oklab, var(--bg) 85%, var(--panel) 15%);
+}
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--foreground) 25%, transparent);
+  border-radius: 999px;
+  border: 3px solid color-mix(in oklab, var(--bg) 85%, var(--panel) 15%);
 }
