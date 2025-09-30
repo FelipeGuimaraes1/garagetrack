@@ -9,9 +9,10 @@
 
 ## UI/UX (Mobile-first)
 
-- [x] Definir layout base mobile (topbar + lista)
+- [x] Definir layout base mobile (topbar + lista) + desktop com sidebar colapsável
 - [ ] Criar componentes: `PageHeader`, `Card`, `EmptyState`
 - [ ] Aplicar paleta dark com CSS variables e utilitários
+- [x] Estados de feedback com toasts visuais
 - [ ] Estados de carregamento e erro acessíveis
 
 ## Autenticação (Auth.js)
@@ -23,9 +24,9 @@
 
 ## Domínio: Veículos
 
-- [ ] Nova página: **/vehicles** (lista com busca e filtros)
-- [ ] Modal **CreateVehicleModal** (nickname, placa, combustível padrão)
-- [ ] Edição e remoção (com confirmação)
+- [x] Nova página: **/vehicles** (lista com busca e filtros)
+- [x] Modal **CreateVehicleModal** (nickname, placa, combustível padrão)
+- [x] Edição e remoção (com confirmação)
 - [ ] Validações (Zod) e máscaras amigáveis
 
 ## Domínio: Despesas

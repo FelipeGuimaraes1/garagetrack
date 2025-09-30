@@ -8,6 +8,9 @@
 */
 
 :root {
+  /* garante que os controles nativos sigam o tema dark em browsers modernos */
+  color-scheme: dark;
+
   /* --- Paleta principal (dark) --- */
   --bg: #0b0f14; /* fundo global */
   --panel: #0f172a; /* painéis (ex.: containers, modais) - slate-900 */
@@ -175,4 +178,40 @@ body {
   background: color-mix(in oklab, var(--foreground) 25%, transparent);
   border-radius: 999px;
   border: 3px solid color-mix(in oklab, var(--bg) 85%, var(--panel) 15%);
+}
+
+/* aparência base de inputs/selects/textarea */
+input,
+select,
+textarea {
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+/* placeholder mais suave */
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in oklab, var(--muted) 90%, transparent);
+}
+
+/* ícone do datepicker no webkit com bom contraste no dark */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.9);
+}
+
+/* ===== Modais sólidos ===== */
+.modal-overlay {
+  /* mais opaco que o 70% que usamos antes */
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.modal-panel {
+  /* em vez do glass, tornamos o fundo sólido e de alto contraste */
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.6),
+    0 0 0 1px color-mix(in oklab, #fff 4%, transparent) inset;
 }
