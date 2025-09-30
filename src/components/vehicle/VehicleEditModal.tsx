@@ -2,6 +2,7 @@
 
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
+import { emitAppEvent } from "@/lib/events";
 import { maskOdometer, maskPlate } from "@/lib/utils/mask-br";
 import { useEffect, useMemo, useState } from "react";
 
@@ -41,6 +42,7 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!vehicleId) return;
+
     try {
       await updateVehicle(vehicleId, {
         nickname: nickname || null,
@@ -48,6 +50,7 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
         fuelDefault: (fuelDefault || null) as any,
         odometerKm: odometerKm ? Number(odometerKm) : null,
       } as any);
+      emitAppEvent("gt:vehicles:changed");
       showToast("Veículo atualizado com sucesso!", "success");
       if (onSaved) await onSaved();
       onClose();
@@ -59,25 +62,27 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
   if (!open || !current) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
-      <div className="panel w-full max-w-md p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Editar veículo</h2>
-          <button
-            onClick={onClose}
-            className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
-          >
-            Fechar
-          </button>
+    <div className="fixed inset-0 z-50 grid place-items-center modal-overlay p-4">
+      <div className="modal-panel w-full max-w-md max-h-[85dvh] overflow-y-auto">
+        <div className="p-4 sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Editar veículo</h2>
+            <button
+              onClick={onClose}
+              className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
+            >
+              Fechar
+            </button>
+          </div>
         </div>
 
-        <form className="space-y-3" onSubmit={handleSubmit}>
+        <form className="space-y-3 p-4 pt-3" onSubmit={handleSubmit}>
           <div>
             <label className="block text-sm mb-1">Apelido</label>
             <input
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+              className="w-full px-3 py-2"
             />
           </div>
 
@@ -86,7 +91,7 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
             <input
               value={plate}
               onChange={(e) => setPlate(maskPlate(e.target.value))}
-              className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+              className="w-full px-3 py-2"
               maxLength={8}
             />
           </div>
@@ -96,7 +101,7 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
             <select
               value={fuelDefault}
               onChange={(e) => setFuelDefault(e.target.value)}
-              className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+              className="w-full px-3 py-2"
             >
               <option value="">Selecione</option>
               {fuelOptions.map((opt) => (
@@ -113,11 +118,11 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
               value={odometerKm}
               onChange={(e) => setOdometerKm(maskOdometer(e.target.value))}
               inputMode="numeric"
-              className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+              className="w-full px-3 py-2"
             />
           </div>
 
-          <div className="pt-2 flex justify-end gap-2">
+          <div className="pt-2 flex justify-end gap-2 sticky bottom-0 bg-[var(--surface)] border-t border-[var(--border)] mt-2">
             <button
               type="button"
               onClick={onClose}

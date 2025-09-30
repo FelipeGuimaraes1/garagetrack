@@ -31,10 +31,10 @@
 
 ## Domínio: Despesas
 
-- [ ] Nova página: **/expenses** (lista filtrável por período, veículo, tipo)
-- [ ] Modal **NewExpenseModal** (tipo, data, valor, descrição, km)
-- [ ] Campos especiais para **ABASTECIMENTO** (litros, preço por litro, combustível, posto)
-- [ ] Edição e remoção (com confirmação)
+- [x] Nova página: **/expenses** (lista filtrável por período, veículo, tipo)
+- [x] Modal **NewExpenseModal** (tipo, data, valor, descrição, km)
+- [x] Campos especiais para **ABASTECIMENTO** (litros, preço por litro, combustível, posto)
+- [x] Edição e remoção (com confirmação)
 - [ ] Validações (Zod) e máscaras BR (separador decimal)
 - [ ] Cards-resumo (mensal, por veículo, por tipo)
 

@@ -3,6 +3,7 @@
 import { useExpenses } from "@/hooks/useExpenses";
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
+import { emitAppEvent } from "@/lib/events";
 import {
   maskCurrencyBRL,
   maskLiters2,
@@ -94,10 +95,10 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
 
       if (isAbastecimento) {
         payload.fuelLiters = fuelLitersMasked
-          ? Number(fuelLitersMasked.replace(".", "").replace(",", "."))
+          ? Number(fuelLitersMasked.replace(/\./g, "").replace(",", "."))
           : null;
         payload.pricePerLiter = pricePerLiterMasked
-          ? Number(pricePerLiterMasked.replace(".", "").replace(",", "."))
+          ? Number(pricePerLiterMasked.replace(/\./g, "").replace(",", "."))
           : null;
         payload.fuelType = fuelType || null;
         payload.station = station || null;
@@ -109,6 +110,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
       }
 
       await updateExpense(expenseId, payload);
+      emitAppEvent("gt:expenses:changed");
       showToast("Despesa atualizada com sucesso!", "success");
       if (onSaved) await onSaved();
       onClose();
@@ -120,25 +122,27 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
   if (!open || !current) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
-      <div className="panel w-full max-w-lg p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Editar despesa</h2>
-          <button
-            onClick={onClose}
-            className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
-          >
-            Fechar
-          </button>
+    <div className="fixed inset-0 z-50 grid place-items-center modal-overlay p-4">
+      <div className="modal-panel w-full max-w-lg max-h-[85dvh] overflow-y-auto">
+        <div className="p-4 sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Editar despesa</h2>
+            <button
+              onClick={onClose}
+              className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
+            >
+              Fechar
+            </button>
+          </div>
         </div>
 
-        <form className="grid gap-3" onSubmit={handleSubmit}>
+        <form className="grid gap-3 p-4 pt-3" onSubmit={handleSubmit}>
           <div>
             <label className="block text-sm mb-1">Veículo</label>
             <select
               value={vehicleId}
               onChange={(e) => setVehicleId(e.target.value)}
-              className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+              className="w-full px-3 py-2"
             >
               {vehicles.map((v) => (
                 <option key={v.id} value={v.id}>
@@ -154,7 +158,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as any)}
-                className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+                className="w-full px-3 py-2"
               >
                 {types.map((t) => (
                   <option key={t} value={t}>
@@ -168,7 +172,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
-                className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+                className="w-full px-3 py-2"
               >
                 <option value="PENDENTE">PENDENTE</option>
                 <option value="PAGO">PAGO</option>
@@ -183,7 +187,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+                className="w-full px-3 py-2"
               />
             </div>
             <div>
@@ -194,7 +198,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
                 onChange={(e) =>
                   setAmountMasked(maskCurrencyBRL(e.target.value))
                 }
-                className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+                className="w-full px-3 py-2"
               />
             </div>
           </div>
@@ -204,7 +208,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
             <input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+              className="w-full px-3 py-2"
             />
           </div>
 
@@ -214,7 +218,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
               inputMode="numeric"
               value={km}
               onChange={(e) => setKm(e.target.value.replace(/\D/g, ""))}
-              className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+              className="w-full px-3 py-2"
             />
           </div>
 
@@ -228,7 +232,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
                   onChange={(e) =>
                     setFuelLitersMasked(maskLiters2(e.target.value))
                   }
-                  className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+                  className="w-full px-3 py-2"
                 />
               </div>
               <div>
@@ -239,7 +243,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
                   onChange={(e) =>
                     setPricePerLiterMasked(maskPricePerLiter2(e.target.value))
                   }
-                  className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+                  className="w-full px-3 py-2"
                 />
               </div>
               <div>
@@ -247,7 +251,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
                 <select
                   value={fuelType}
                   onChange={(e) => setFuelType(e.target.value)}
-                  className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+                  className="w-full px-3 py-2"
                 >
                   <option value="">Selecione</option>
                   {fuelTypes.map((f) => (
@@ -262,13 +266,13 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
                 <input
                   value={station}
                   onChange={(e) => setStation(e.target.value)}
-                  className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
+                  className="w-full px-3 py-2"
                 />
               </div>
             </div>
           )}
 
-          <div className="pt-2 flex justify-end gap-2">
+          <div className="pt-2 flex justify-end gap-2 sticky bottom-0 bg-[var(--surface)] border-t border-[var(--border)] mt-2">
             <button
               type="button"
               onClick={onClose}
