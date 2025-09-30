@@ -63,6 +63,9 @@ model User {
   // Tabelas do Auth.js / NextAuth (para logins e sessões)
   accounts     Account[]                         // contas externas (Google, etc.)
   sessions     Session[]                         // sessões (se usar strategy database)
+
+  // ✅ back-relation: lembretes pertencentes ao usuário
+  reminderRules ReminderRule[]
 }
 
 /// Conta conectada de provedor (OAuth etc.) — compatível com Auth.js
@@ -120,6 +123,9 @@ model Vehicle {
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   expenses    Expense[]                               // despesas vinculadas ao veículo
 
+  // ✅ back-relation: lembretes associados a este veículo
+  reminderRules ReminderRule[]
+
   @@index([userId])                                   // acelera consultas por dono
   @@unique([userId, plate])                           // placa única por usuário
 }
@@ -169,4 +175,46 @@ model ExpenseAttachment {
   expense     Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
 
   @@index([expenseId])                               // consultas por despesa
+}
+
+// --- LEMBRETES (regras que disparam avisos) ---
+enum ReminderType {
+  OIL_CHANGE   // troca de óleo
+  SERVICE      // revisão/manutenção geral
+  DOCUMENT     // IPVA, licenciamento, seguro
+  FINE         // pagamento de multa
+  CUSTOM       // lembrete livre
+}
+
+model ReminderRule {
+  id           String       @id @default(uuid())        // id único
+  userId       String                                   // FK dono
+  vehicleId    String?                                  // opcional (pode ser geral)
+  type         ReminderType                             // tipo de lembrete
+  title        String                                   // ex.: "Troca de óleo", "IPVA 2026"
+  notes        String?                                  // observações
+
+  // Periodicidade por km e/ou por tempo
+  everyKm      Int?                                     // ex.: 10000 km
+  everyDays    Int?                                     // ex.: 180 dias
+
+  // Referência da última execução
+  lastDoneKm   Int?                                     // odômetro quando fez por último
+  lastDoneAt   DateTime?                                // data quando fez por último
+
+  // Data fixa (documentos/multas)
+  dueDate      DateTime?                                // vencimento
+
+  // Janela de aviso ("faltando tanto")
+  warnKmLeft   Int?          @default(500)              // avisa quando faltar <= X km
+  warnDaysLeft Int?          @default(15)               // avisa quando faltar <= X dias
+
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([userId, vehicleId, type])
 }

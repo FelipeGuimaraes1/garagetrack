@@ -36,7 +36,7 @@
 - [x] Campos especiais para **ABASTECIMENTO** (litros, preço por litro, combustível, posto)
 - [x] Edição e remoção (com confirmação)
 - [ ] Validações (Zod) e máscaras BR (separador decimal)
-- [ ] Cards-resumo (mensal, por veículo, por tipo)
+- [x] Cards-resumo (mensal, por veículo, por tipo)
 
 ## Uploads (Cloudinary)
 
@@ -62,7 +62,7 @@
 
 - [x] Utilitário de máscara BR (`src/lib/utils/mask-br.ts`)
 - [x] Zod schemas (`src/lib/validations/*.ts`)
-- [ ] Utilitários de data/moeda (`formatCurrencyBRL`, `formatDateISO`)
+- [x] Utilitários de data/moeda (`formatCurrencyBRL`, `formatDateISO`)
 
 ## Deploy
 

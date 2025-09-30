@@ -83,6 +83,12 @@ export function Sidebar() {
         >
           {isCollapsed ? "💳" : "Despesas"}
         </Link>
+        <Link
+          href="/reminders"
+          className="block px-3 py-2 rounded-lg hover:ring-1 hover:ring-white/5 border border-transparent hover:border-[var(--border)]"
+        >
+          {isCollapsed ? "🔔" : "Lembretes"}
+        </Link>
       </nav>
 
       {/* footer com usuário logado */}
