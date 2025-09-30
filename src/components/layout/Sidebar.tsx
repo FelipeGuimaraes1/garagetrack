@@ -66,6 +66,12 @@ export function Sidebar() {
       {/* nav */}
       <nav className="p-3 space-y-2">
         <Link
+          href="/dashboard"
+          className="block px-3 py-2 rounded-lg hover:ring-1 hover:ring-white/5 border border-transparent hover:border-[var(--border)]"
+        >
+          {isCollapsed ? "📊" : "Dashboard"}
+        </Link>
+        <Link
           href="/vehicles"
           className="block px-3 py-2 rounded-lg hover:ring-1 hover:ring-white/5 border border-transparent hover:border-[var(--border)]"
         >

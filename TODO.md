@@ -11,7 +11,7 @@
 
 - [x] Definir layout base mobile (topbar + lista) + desktop com sidebar colapsável
 - [ ] Criar componentes: `PageHeader`, `Card`, `EmptyState`
-- [ ] Aplicar paleta dark com CSS variables e utilitários
+- [x] Aplicar paleta dark com CSS variables e utilitários
 - [x] Estados de feedback com toasts visuais
 - [ ] Estados de carregamento e erro acessíveis
 
@@ -60,8 +60,8 @@
 
 ## Qualidade
 
-- [ ] Utilitário de máscara BR (`src/lib/utils/mask-br.ts`)
-- [ ] Zod schemas (`src/lib/validations/*.ts`)
+- [x] Utilitário de máscara BR (`src/lib/utils/mask-br.ts`)
+- [x] Zod schemas (`src/lib/validations/*.ts`)
 - [ ] Utilitários de data/moeda (`formatCurrencyBRL`, `formatDateISO`)
 
 ## Deploy
