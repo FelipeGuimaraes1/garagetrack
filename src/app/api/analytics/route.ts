@@ -12,27 +12,30 @@ type SummaryResponse = {
   lastMonths: Array<{ monthISO: string; total: number }>;
 };
 
-// Tipos auxiliares para o retorno do groupBy
 type GroupedByVehicle = { vehicleId: string; _sum: { amount: number | null } };
 
-/** GET /api/analytics?month=YYYY-MM (opcional) */
+/** GET /api/analytics?month=YYYY-MM&vehicleId=...&type=ABASTECIMENTO|MANUTENCAO|... */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const monthParam = searchParams.get("month"); // p.ex. "2025-09"
+  const monthParam = searchParams.get("month"); // "2025-09"
+  const vehicleId = searchParams.get("vehicleId") || ""; // vazio = todos
+  const typeParam = searchParams.get("type") || ""; // vazio = todos
+
   const baseDate = monthParam
     ? new Date(`${monthParam}-01T00:00:00`)
     : new Date();
-
   const from = startOfMonth(baseDate);
   const to = endOfMonth(baseDate);
 
   const prevFrom = startOfMonth(subMonths(from, 1));
   const prevTo = endOfMonth(subMonths(from, 1));
 
-  // Apenas despesas pagas
-  const baseWhere = { status: "PAGO" as const };
+  // where base: somente despesas pagas
+  const baseWhere: any = { status: "PAGO" as const };
+  if (vehicleId) baseWhere.vehicleId = vehicleId;
+  if (typeParam) baseWhere.type = typeParam;
 
-  // Mês atual
+  // mês atual
   const [sumThis, countThis] = await Promise.all([
     prisma.expense.aggregate({
       where: { ...baseWhere, date: { gte: from, lte: to } },
@@ -42,56 +45,48 @@ export async function GET(req: Request) {
       where: { ...baseWhere, date: { gte: from, lte: to } },
     }),
   ]);
-
-  const totalThisMonth: number = Number(sumThis._sum.amount ?? 0);
-  const countThisMonth: number = countThis;
-  const avgTicketThisMonth: number = countThisMonth
+  const totalThisMonth = Number(sumThis._sum.amount ?? 0);
+  const countThisMonth = countThis;
+  const avgTicketThisMonth = countThisMonth
     ? totalThisMonth / countThisMonth
     : 0;
 
-  // Mês anterior
+  // mês anterior (mesmos filtros vehicleId/type)
   const sumPrev = await prisma.expense.aggregate({
     where: { ...baseWhere, date: { gte: prevFrom, lte: prevTo } },
     _sum: { amount: true },
   });
-  const totalPrevMonth: number = Number(sumPrev._sum.amount ?? 0);
+  const totalPrevMonth = Number(sumPrev._sum.amount ?? 0);
 
-  // Por veículo – mês atual
+  // por veículo no mês atual (respeita o filtro de type; se já tem vehicleId, cairá 1 item)
   const grouped = (await prisma.expense.groupBy({
     by: ["vehicleId"],
     where: { ...baseWhere, date: { gte: from, lte: to } },
     _sum: { amount: true },
   })) as unknown as GroupedByVehicle[];
 
-  const vehicleIds: string[] = grouped.map(
-    (g: GroupedByVehicle) => g.vehicleId
-  );
+  const ids = grouped.map((g) => g.vehicleId);
+  const vehicles =
+    ids.length > 0
+      ? await prisma.vehicle.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, nickname: true, plate: true },
+        })
+      : [];
 
-  const vehicles = vehicleIds.length
-    ? await prisma.vehicle.findMany({
-        where: { id: { in: vehicleIds } },
-        select: { id: true, nickname: true, plate: true },
-      })
-    : [];
-
-  // Cria um Map para lookup O(1)
-  const vehicleMap = new Map<
-    string,
-    { id: string; nickname: string | null; plate: string | null }
-  >(vehicles.map((v) => [v.id, v]));
-
-  const byVehicle: Array<{ vehicleId: string; label: string; total: number }> =
-    grouped.map((g: GroupedByVehicle) => {
-      const v = vehicleMap.get(g.vehicleId);
-      const label = v?.nickname || v?.plate || "Veículo";
+  const map = new Map(vehicles.map((v) => [v.id, v]));
+  const byVehicle = grouped
+    .map((g) => {
+      const v = map.get(g.vehicleId);
       return {
         vehicleId: g.vehicleId,
-        label,
+        label: v?.nickname || v?.plate || "Veículo",
         total: Number(g._sum.amount ?? 0),
       };
-    });
+    })
+    .sort((a, b) => b.total - a.total);
 
-  // Série dos últimos 6 meses (inclui o atual)
+  // série últimos 6 meses (sempre com os filtros atuais)
   const lastMonths: Array<{ monthISO: string; total: number }> = [];
   for (let i = 5; i >= 0; i--) {
     const mFrom = startOfMonth(subMonths(from, i));
@@ -112,7 +107,7 @@ export async function GET(req: Request) {
     totalPrevMonth,
     avgTicketThisMonth,
     countThisMonth,
-    byVehicle: byVehicle.sort((a, b) => b.total - a.total),
+    byVehicle,
     lastMonths,
   };
 
