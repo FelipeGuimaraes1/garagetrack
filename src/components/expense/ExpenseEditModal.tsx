@@ -1,6 +1,7 @@
 "use client";
 
 import { useExpenses } from "@/hooks/useExpenses";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
 import { emitAppEvent } from "@/lib/events";
@@ -10,7 +11,7 @@ import {
   maskPricePerLiter2,
   unmaskCurrencyBRL,
 } from "@/lib/utils/mask-br";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Props = {
   expenseId: string | null;
@@ -38,7 +39,6 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
     [expenses, expenseId]
   );
 
-  // estados
   const [vehicleId, setVehicleId] = useState("");
   const [type, setType] = useState<(typeof types)[number]>("ABASTECIMENTO");
   const [status, setStatus] = useState<"PAGO" | "PENDENTE">("PENDENTE");
@@ -119,14 +119,42 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
     }
   }
 
+  // A11y
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(
+    panelRef as unknown as React.RefObject<HTMLElement | null>,
+    open
+  );
+  useEffect(() => {
+    if (!open) return;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, [open, onClose]);
+
   if (!open || !current) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center modal-overlay p-4">
-      <div className="modal-panel w-full max-w-lg max-h-[85dvh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 grid place-items-center modal-overlay p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="expense-edit-title"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={panelRef}
+        className="modal-panel w-full max-w-lg max-h-[85dvh] overflow-y-auto"
+      >
         <div className="p-4 sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Editar despesa</h2>
+            <h2 id="expense-edit-title" className="text-lg font-semibold">
+              Editar despesa
+            </h2>
             <button
               onClick={onClose}
               className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
@@ -254,7 +282,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
                   className="w-full px-3 py-2"
                 >
                   <option value="">Selecione</option>
-                  {fuelTypes.map((f) => (
+                  {["GASOLINA", "ETANOL", "DIESEL", "GNV"].map((f) => (
                     <option key={f} value={f}>
                       {f}
                     </option>

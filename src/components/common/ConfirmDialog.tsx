@@ -1,5 +1,8 @@
 "use client";
 
+import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { useEffect, useRef } from "react";
+
 type ConfirmDialogProps = {
   open: boolean;
   title?: string;
@@ -19,12 +22,37 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(
+    panelRef as unknown as React.RefObject<HTMLElement | null>,
+    open
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, [open, onCancel]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
-      <div className="panel w-full max-w-md p-4">
-        <h3 className="text-lg font-semibold">{title}</h3>
+    <div
+      className="fixed inset-0 z-50 grid place-items-center modal-overlay p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-title"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div ref={panelRef} className="modal-panel w-full max-w-md p-4">
+        <h3 id="confirm-title" className="text-lg font-semibold">
+          {title}
+        </h3>
         <p className="text-sm text-[var(--muted)] mt-1">{description}</p>
         <div className="mt-4 flex justify-end gap-2">
           <button

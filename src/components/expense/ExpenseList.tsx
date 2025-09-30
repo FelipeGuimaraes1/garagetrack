@@ -5,6 +5,7 @@ import { useExpenses } from "@/hooks/useExpenses";
 import { useToast } from "@/hooks/useToast";
 import { emitAppEvent, onAppEvent } from "@/lib/events";
 import { formatCurrencyBRL } from "@/lib/utils/formatters";
+import { Edit2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ExpenseEditModal } from "./ExpenseEditModal";
 
@@ -111,15 +112,15 @@ export function ExpenseList() {
                 <div className="mt-2 flex gap-2 justify-end">
                   <button
                     onClick={() => setEditingId(e.id)}
-                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm cursor-pointer"
                   >
-                    Editar
+                    <Edit2 size={16} />
                   </button>
                   <button
                     onClick={() => setRemovingId(e.id)}
-                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm cursor-pointer"
                   >
-                    Remover
+                    <Trash2 size={16} className="text-[var(--danger)]" />
                   </button>
                 </div>
               </div>

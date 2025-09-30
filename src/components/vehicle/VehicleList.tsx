@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
 import { emitAppEvent, onAppEvent } from "@/lib/events";
 import { formatDateISO } from "@/lib/utils/formatters";
+import { Edit2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { VehicleEditModal } from "./VehicleEditModal";
 
@@ -71,13 +72,13 @@ export function VehicleList() {
                   onClick={() => setEditingId(v.id)}
                   className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
                 >
-                  Editar
+                  <Edit2 size={16} />
                 </button>
                 <button
                   onClick={() => setRemovingId(v.id)}
                   className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
                 >
-                  Remover
+                  <Trash2 size={16} className="text-[var(--danger)]" />
                 </button>
               </div>
             </div>
