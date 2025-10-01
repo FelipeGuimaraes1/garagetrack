@@ -12,6 +12,15 @@ type Props = {
 };
 
 const TYPES = ["OIL_CHANGE", "SERVICE", "DOCUMENT", "FINE", "CUSTOM"] as const;
+const TYPE_LABEL: Record<(typeof TYPES)[number], string> = {
+  OIL_CHANGE: "Troca de óleo",
+  SERVICE: "Manutenção / Revisão",
+  DOCUMENT: "Documento (IPVA, licenciamento, seguro)",
+  FINE: "Multa",
+  CUSTOM: "Personalizado",
+};
+
+type Mode = "KM" | "DIAS" | "DATA";
 
 export function ReminderRuleForm({
   open,
@@ -21,12 +30,13 @@ export function ReminderRuleForm({
 }: Props) {
   const { vehicles } = useVehicles();
 
-  const [userId, setUserId] = useState<string>("demo-user"); // placeholder: integrar com auth depois
   const [vehicleId, setVehicleId] = useState<string>("");
-  const [type, setType] = useState<string>("OIL_CHANGE");
+  const [type, setType] = useState<(typeof TYPES)[number]>("OIL_CHANGE");
   const [title, setTitle] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
 
+  // modo selecionado (uma base)
+  const [mode, setMode] = useState<Mode>("KM");
   const [everyKm, setEveryKm] = useState<string>("");
   const [everyDays, setEveryDays] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
@@ -41,29 +51,49 @@ export function ReminderRuleForm({
     setType(defaultValues.type ?? "OIL_CHANGE");
     setTitle(defaultValues.title ?? "");
     setNotes(defaultValues.notes ?? "");
+
+    // tenta deduzir o modo a partir dos valores existentes
+    if (defaultValues.everyKm) setMode("KM");
+    else if (defaultValues.everyDays) setMode("DIAS");
+    else if (defaultValues.dueDate) setMode("DATA");
+
     setEveryKm(defaultValues.everyKm?.toString() ?? "");
     setEveryDays(defaultValues.everyDays?.toString() ?? "");
     setDueDate(defaultValues.dueDate ? defaultValues.dueDate.slice(0, 10) : "");
+
     setWarnKmLeft(defaultValues.warnKmLeft?.toString() ?? "500");
     setWarnDaysLeft(defaultValues.warnDaysLeft?.toString() ?? "15");
     setIsActive(defaultValues.isActive ?? true);
   }, [defaultValues]);
 
+  function clearModeFields(next: Mode) {
+    setMode(next);
+    if (next !== "KM") setEveryKm("");
+    if (next !== "DIAS") setEveryDays("");
+    if (next !== "DATA") setDueDate("");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const payload = {
-      userId,
+
+    const payload: any = {
       vehicleId: vehicleId || null,
       type,
       title,
       notes: notes || null,
-      everyKm: everyKm ? Number(everyKm) : null,
-      everyDays: everyDays ? Number(everyDays) : null,
-      dueDate: dueDate ? new Date(`${dueDate}T00:00:00`) : null,
+      everyKm: null,
+      everyDays: null,
+      dueDate: null,
       warnKmLeft: warnKmLeft ? Number(warnKmLeft) : 500,
       warnDaysLeft: warnDaysLeft ? Number(warnDaysLeft) : 15,
       isActive,
     };
+
+    if (mode === "KM" && everyKm) payload.everyKm = Number(everyKm);
+    if (mode === "DIAS" && everyDays) payload.everyDays = Number(everyDays);
+    if (mode === "DATA" && dueDate)
+      payload.dueDate = new Date(`${dueDate}T00:00:00`);
+
     await onSubmit(payload);
     onClose();
   }
@@ -102,11 +132,11 @@ export function ReminderRuleForm({
             <select
               className="w-full px-3 py-2"
               value={type}
-              onChange={(e) => setType(e.target.value)}
+              onChange={(e) => setType(e.target.value as any)}
             >
               {TYPES.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {TYPE_LABEL[t]}
                 </option>
               ))}
             </select>
@@ -134,7 +164,7 @@ export function ReminderRuleForm({
               className="w-full px-3 py-2"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex.: Troca de óleo"
+              placeholder="Ex.: Próxima revisão"
             />
           </div>
 
@@ -148,19 +178,56 @@ export function ReminderRuleForm({
             />
           </div>
 
+          {/* Escolha da base */}
+          <fieldset className="grid gap-2">
+            <legend className="text-sm text-[var(--muted)]">Base</legend>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label className="surface flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer">
+                <input
+                  type="radio"
+                  name="mode"
+                  checked={mode === "KM"}
+                  onChange={() => clearModeFields("KM")}
+                />
+                <span>Cada X km</span>
+              </label>
+              <label className="surface flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer">
+                <input
+                  type="radio"
+                  name="mode"
+                  checked={mode === "DIAS"}
+                  onChange={() => clearModeFields("DIAS")}
+                />
+                <span>Cada X dias</span>
+              </label>
+              <label className="surface flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer">
+                <input
+                  type="radio"
+                  name="mode"
+                  checked={mode === "DATA"}
+                  onChange={() => clearModeFields("DATA")}
+                />
+                <span>Data limite</span>
+              </label>
+            </div>
+          </fieldset>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm mb-1">Cada X km</label>
+              <label className="block text-sm mb-1 opacity-80">Cada X km</label>
               <input
                 className="w-full px-3 py-2"
                 inputMode="numeric"
                 value={everyKm}
                 onChange={(e) => setEveryKm(e.target.value.replace(/\D/g, ""))}
+                disabled={mode !== "KM"}
                 placeholder="ex.: 10000"
               />
             </div>
             <div>
-              <label className="block text-sm mb-1">Cada X dias</label>
+              <label className="block text-sm mb-1 opacity-80">
+                Cada X dias
+              </label>
               <input
                 className="w-full px-3 py-2"
                 inputMode="numeric"
@@ -168,16 +235,20 @@ export function ReminderRuleForm({
                 onChange={(e) =>
                   setEveryDays(e.target.value.replace(/\D/g, ""))
                 }
+                disabled={mode !== "DIAS"}
                 placeholder="ex.: 180"
               />
             </div>
             <div>
-              <label className="block text-sm mb-1">Data fixa</label>
+              <label className="block text-sm mb-1 opacity-80">
+                Data limite
+              </label>
               <input
                 type="date"
                 className="w-full px-3 py-2"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
+                disabled={mode !== "DATA"}
               />
             </div>
           </div>

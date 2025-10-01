@@ -78,7 +78,7 @@ export function ReminderList() {
                     className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
                     onClick={async () => {
                       try {
-                        await markDone(r.id); // se quiser perguntar odômetro, dá pra abrir um prompt depois
+                        await markDone(r.id);
                         showToast("Lembrete marcado como feito!", "success");
                       } catch (e: any) {
                         showToast(

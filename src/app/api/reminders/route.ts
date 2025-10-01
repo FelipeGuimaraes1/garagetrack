@@ -27,12 +27,11 @@ export async function GET(req: Request) {
     let status: "OK" | "DUE_SOON" | "OVERDUE" = "OK";
     let message = "Sem previsão.";
 
-    // por km/tempo (periodicidade)
+    // periodicidade
     if (r.everyKm || r.everyDays) {
       const kmRef = r.lastDoneKm ?? 0;
       const dateRef = r.lastDoneAt ?? r.createdAt;
 
-      // por km
       if (r.everyKm) {
         const odo = r.vehicleId ? await getCurrentOdometer(r.vehicleId) : null;
         if (odo != null) {
@@ -52,7 +51,6 @@ export async function GET(req: Request) {
         }
       }
 
-      // por dias
       if (r.everyDays) {
         const next = new Date(dateRef);
         next.setDate(next.getDate() + r.everyDays);
@@ -69,7 +67,6 @@ export async function GET(req: Request) {
       }
     }
 
-    // por data fixa (documentos/multas)
     if (r.dueDate) {
       const days = diffDays(today, r.dueDate);
       if (days <= 0) {
@@ -97,20 +94,49 @@ export async function GET(req: Request) {
   return NextResponse.json(out, { status: 200 });
 }
 
-/** POST /api/reminders  (criar regra) */
+/** Resolve um userId válido:
+ *  - se houver vehicleId, usa o dono do veículo
+ *  - senão retorna o primeiro usuário ou cria um placeholder
+ */
+async function resolveUserId(vehicleId?: string | null): Promise<string> {
+  if (vehicleId) {
+    const veh = await prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      select: { userId: true },
+    });
+    if (veh?.userId) return veh.userId;
+  }
+  const first = await prisma.user.findFirst({ select: { id: true } });
+  if (first?.id) return first.id;
+
+  const created = await prisma.user.create({
+    data: {
+      email: `user-${Date.now()}@example.com`,
+      name: "Usuário",
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+/** POST /api/reminders  (criar regra)
+ * body: { vehicleId?, type, title, notes?, everyKm?, everyDays?, dueDate?, warnKmLeft?, warnDaysLeft?, isActive? }
+ */
 export async function POST(req: Request) {
   const body = await req.json();
-  // validação simples (MVP)
-  if (!body || !body.userId || !body.title || !body.type) {
+
+  if (!body || !body.type || !body.title) {
     return NextResponse.json(
-      { error: "Campos obrigatórios: userId, type, title" },
+      { error: "Campos obrigatórios: type e title" },
       { status: 400 }
     );
   }
 
+  const userId = await resolveUserId(body.vehicleId ?? null);
+
   const created = await prisma.reminderRule.create({
     data: {
-      userId: body.userId,
+      userId,
       vehicleId: body.vehicleId ?? null,
       type: body.type,
       title: body.title,

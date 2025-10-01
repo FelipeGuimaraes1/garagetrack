@@ -1,7 +1,10 @@
-"use client";
+// "use client";
 
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { ReminderRuleForm } from "@/components/reminders/ReminderRuleForm";
 import { useExpenses } from "@/hooks/useExpenses";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { useReminders } from "@/hooks/useReminders";
 import { useToast } from "@/hooks/useToast";
 import { UploadedAttachment } from "@/hooks/useUpload";
 import { useVehicles } from "@/hooks/useVehicles";
@@ -31,6 +34,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   const { vehicles } = useVehicles();
   const { createExpense, reload } = useExpenses();
   const { showToast } = useToast();
+  const reminders = useReminders(); // para criar lembrete logo depois
 
   const [vehicleId, setVehicleId] = useState("");
   const [type, setType] = useState<(typeof types)[number]>("ABASTECIMENTO");
@@ -48,6 +52,10 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   const [station, setStation] = useState("");
 
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
+
+  const [askReminder, setAskReminder] = useState(false);
+  const [openReminder, setOpenReminder] = useState(false);
+  const [prefillReminder, setPrefillReminder] = useState<any | null>(null);
 
   const isAbastecimento = useMemo(() => type === "ABASTECIMENTO", [type]);
 
@@ -105,7 +113,22 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
       emitAppEvent("gt:expenses:changed");
       showToast("Despesa criada com sucesso!", "success");
       await reload();
-      onClose();
+
+      // Perguntar lembrete se for MANUTENCAO
+      if (type === "MANUTENCAO") {
+        setPrefillReminder({
+          vehicleId,
+          type: "SERVICE",
+          title: "Próxima manutenção",
+          notes: "",
+          // base: usuário escolhe no modal; poderíamos sugerir com base na descrição ou um default
+        });
+        setAskReminder(true);
+      } else {
+        onClose();
+      }
+
+      // limpa form
       setAmountMasked("");
       setDescription("");
       setKm("");
@@ -147,212 +170,250 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center modal-overlay p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="expense-create-title"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+    <>
       <div
-        ref={panelRef}
-        className="modal-panel w-full max-w-lg max-h-[85dvh] overflow-y-auto"
+        className="fixed inset-0 z-50 grid place-items-center modal-overlay p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="expense-create-title"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
       >
-        <div className="p-4 sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
-          <div className="flex items-center justify-between">
-            <h2 id="expense-create-title" className="text-lg font-semibold">
-              Nova despesa
-            </h2>
-            <button
-              onClick={onClose}
-              className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-
-        <form className="grid gap-3 p-4 pt-3" onSubmit={handleSubmit}>
-          <div>
-            <label className="block text-sm mb-1">Veículo</label>
-            <select
-              value={vehicleId}
-              onChange={(e) => setVehicleId(e.target.value)}
-              className="w-full px-3 py-2"
-            >
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.nickname || v.plate || "Sem apelido"}
-                </option>
-              ))}
-            </select>
+        <div
+          ref={panelRef}
+          className="modal-panel w-full max-w-lg max-h-[85dvh] overflow-y-auto"
+        >
+          <div className="p-4 sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
+            <div className="flex items-center justify-between">
+              <h2 id="expense-create-title" className="text-lg font-semibold">
+                Nova despesa
+              </h2>
+              <button
+                onClick={onClose}
+                className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <form className="grid gap-3 p-4 pt-3" onSubmit={handleSubmit}>
             <div>
-              <label className="block text-sm mb-1">Tipo</label>
+              <label className="block text-sm mb-1">Veículo</label>
               <select
-                value={type}
-                onChange={(e) => setType(e.target.value as any)}
+                value={vehicleId}
+                onChange={(e) => setVehicleId(e.target.value)}
                 className="w-full px-3 py-2"
               >
-                {types.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nickname || v.plate || "Sem apelido"}
                   </option>
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm mb-1">Status</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
-                className="w-full px-3 py-2"
-              >
-                <option value="PENDENTE">PENDENTE</option>
-                <option value="PAGO">PAGO</option>
-              </select>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm mb-1">Tipo</label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as any)}
+                  className="w-full px-3 py-2"
+                >
+                  {types.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Status</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as any)}
+                  className="w-full px-3 py-2"
+                >
+                  <option value="PENDENTE">PENDENTE</option>
+                  <option value="PAGO">PAGO</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm mb-1">Data</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Valor</label>
+                <input
+                  inputMode="numeric"
+                  value={amountMasked}
+                  onChange={(e) =>
+                    setAmountMasked(maskCurrencyBRL(e.target.value))
+                  }
+                  placeholder="R$ 0,00"
+                  className="w-full px-3 py-2"
+                />
+              </div>
+            </div>
+
             <div>
-              <label className="block text-sm mb-1">Data</label>
+              <label className="block text-sm mb-1">Descrição</label>
               <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Ex.: Troca de óleo"
                 className="w-full px-3 py-2"
               />
             </div>
+
             <div>
-              <label className="block text-sm mb-1">Valor</label>
+              <label className="block text-sm mb-1">Hodômetro (km)</label>
               <input
                 inputMode="numeric"
-                value={amountMasked}
-                onChange={(e) =>
-                  setAmountMasked(maskCurrencyBRL(e.target.value))
-                }
-                placeholder="R$ 0,00"
+                value={km}
+                onChange={(e) => setKm(e.target.value.replace(/\D/g, ""))}
                 className="w-full px-3 py-2"
+                placeholder="Ex.: 80010"
               />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm mb-1">Descrição</label>
-            <input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ex.: Troca de óleo"
-              className="w-full px-3 py-2"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Hodômetro (km)</label>
-            <input
-              inputMode="numeric"
-              value={km}
-              onChange={(e) => setKm(e.target.value.replace(/\D/g, ""))}
-              className="w-full px-3 py-2"
-              placeholder="Ex.: 80010"
-            />
-          </div>
-
-          {isAbastecimento && (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm mb-1">Litros</label>
-                  <input
-                    inputMode="numeric"
-                    value={fuelLitersMasked}
-                    onChange={(e) =>
-                      setFuelLitersMasked(maskLiters2(e.target.value))
-                    }
-                    placeholder="0,00"
-                    className="w-full px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm mb-1">Preço/L</label>
-                  <input
-                    inputMode="numeric"
-                    value={pricePerLiterMasked}
-                    onChange={(e) =>
-                      setPricePerLiterMasked(maskPricePerLiter2(e.target.value))
-                    }
-                    placeholder="0,00"
-                    className="w-full px-3 py-2"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm mb-1">Combustível</label>
-                  <select
-                    value={fuelType}
-                    onChange={(e) => setFuelType(e.target.value)}
-                    className="w-full px-3 py-2"
-                  >
-                    <option value="">Selecione</option>
-                    {fuelTypes.map((f) => (
-                      <option key={f} value={f}>
-                        {f}
-                      </option>
-                    ))}
-                  </select>
+            {isAbastecimento && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm mb-1">Litros</label>
+                    <input
+                      inputMode="numeric"
+                      value={fuelLitersMasked}
+                      onChange={(e) =>
+                        setFuelLitersMasked(maskLiters2(e.target.value))
+                      }
+                      placeholder="0,00"
+                      className="w-full px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1">Preço/L</label>
+                    <input
+                      inputMode="numeric"
+                      value={pricePerLiterMasked}
+                      onChange={(e) =>
+                        setPricePerLiterMasked(
+                          maskPricePerLiter2(e.target.value)
+                        )
+                      }
+                      placeholder="0,00"
+                      className="w-full px-3 py-2"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm mb-1">Posto</label>
-                  <input
-                    value={station}
-                    onChange={(e) => setStation(e.target.value)}
-                    placeholder="Ex.: Posto Centro"
-                    className="w-full px-3 py-2"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm mb-1">Combustível</label>
+                    <select
+                      value={fuelType}
+                      onChange={(e) => setFuelType(e.target.value)}
+                      className="w-full px-3 py-2"
+                    >
+                      <option value="">Selecione</option>
+                      {fuelTypes.map((f) => (
+                        <option key={f} value={f}>
+                          {f}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm mb-1">Posto</label>
+                    <input
+                      value={station}
+                      onChange={(e) => setStation(e.target.value)}
+                      placeholder="Ex.: Posto Centro"
+                      className="w-full px-3 py-2"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {consumptionMessage && (
-                <div className="text-sm text-[var(--muted)] -mt-1">
-                  {consumptionMessage}
+                {consumptionMessage && (
+                  <div className="text-sm text-[var(--muted)] -mt-1">
+                    {consumptionMessage}
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="grid gap-2">
+              <ReceiptUploader
+                onAdd={(a) => setAttachments((prev) => [...prev, a])}
+              />
+              {attachments.length ? (
+                <div className="text-sm text-[var(--muted)]">
+                  {attachments.length} anexo(s) pronto(s) para enviar.
                 </div>
-              )}
-            </>
-          )}
+              ) : null}
+            </div>
 
-          <div className="grid gap-2">
-            <ReceiptUploader
-              onAdd={(a) => setAttachments((prev) => [...prev, a])}
-            />
-            {attachments.length ? (
-              <div className="text-sm text-[var(--muted)]">
-                {attachments.length} anexo(s) pronto(s) para enviar.
-              </div>
-            ) : null}
-          </div>
-
-          <div className="pt-2 flex justify-end gap-2 sticky bottom-0 bg-[var(--surface)] border-t border-[var(--border)] mt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
-            >
-              Cancelar
-            </button>
-            <button type="submit" className="button-primary">
-              Salvar
-            </button>
-          </div>
-        </form>
+            <div className="pt-2 flex justify-end gap-2 sticky bottom-0 bg-[var(--surface)] border-t border-[var(--border)] mt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
+              >
+                Cancelar
+              </button>
+              <button type="submit" className="button-primary">
+                Salvar
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+
+      {/* Pergunta se quer adicionar lembrete (apenas após MANUTENCAO) */}
+      <ConfirmDialog
+        open={askReminder}
+        title="Adicionar lembrete?"
+        description="Deseja criar um lembrete para a próxima manutenção deste veículo?"
+        confirmText="Sim, criar"
+        cancelText="Agora não"
+        onCancel={() => {
+          setAskReminder(false);
+          onClose();
+        }}
+        onConfirm={() => {
+          setAskReminder(false);
+          setOpenReminder(true);
+        }}
+      />
+
+      {/* Modal do lembrete já com alguns dados preenchidos */}
+      <ReminderRuleForm
+        open={openReminder}
+        onClose={() => {
+          setOpenReminder(false);
+          onClose();
+        }}
+        defaultValues={prefillReminder ?? undefined}
+        onSubmit={async (payload) => {
+          try {
+            await reminders.createRule(payload);
+          } catch (e) {
+            // o hook já vai tratar erro no toast da página de lembretes; aqui é fluxo direto
+          }
+        }}
+      />
+    </>
   );
 }
