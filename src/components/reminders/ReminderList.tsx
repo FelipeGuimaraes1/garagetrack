@@ -7,6 +7,7 @@ import { useVehicles } from "@/hooks/useVehicles";
 import { useState } from "react";
 import { MarkDoneDialog } from "./MarkDoneDialog";
 import { ReminderRuleForm } from "./ReminderRuleForm";
+import { SnoozeDialog } from "./SnoozeDialog";
 
 export function ReminderList() {
   const {
@@ -18,15 +19,17 @@ export function ReminderList() {
     updateRule,
     deleteRule,
     markDone,
+    snoozeRule,
   } = useReminders({ onlyActive: true });
+
   const { vehicles } = useVehicles();
   const { showToast } = useToast();
 
   const [openForm, setOpenForm] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
-
   const [markId, setMarkId] = useState<string | null>(null);
+  const [snoozeId, setSnoozeId] = useState<string | null>(null);
 
   function colorByStatus(s: string) {
     if (s === "OVERDUE") return "border-[color:var(--danger)]/40";
@@ -82,6 +85,12 @@ export function ReminderList() {
                     onClick={() => setMarkId(r.id)}
                   >
                     Feito
+                  </button>
+                  <button
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
+                    onClick={() => setSnoozeId(r.id)}
+                  >
+                    Adiar
                   </button>
                   <button
                     className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
@@ -156,6 +165,25 @@ export function ReminderList() {
             showToast(e.message || "Falha ao marcar como feito.", "error");
           } finally {
             setMarkId(null);
+          }
+        }}
+      />
+
+      <SnoozeDialog
+        open={Boolean(snoozeId)}
+        onClose={() => setSnoozeId(null)}
+        onConfirm={async (days) => {
+          if (!snoozeId || !days) {
+            setSnoozeId(null);
+            return;
+          } // early-return
+          try {
+            await snoozeRule!(snoozeId, days); // asserção não-nula para o TS
+            showToast(`Lembrete adiado em ${days} dia(s).`, "info");
+          } catch (e: any) {
+            showToast(e.message || "Falha ao adiar.", "error");
+          } finally {
+            setSnoozeId(null);
           }
         }}
       />

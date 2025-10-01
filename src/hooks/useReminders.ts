@@ -12,20 +12,33 @@ export type ReminderComputed = {
   message: string;
 };
 
-export function useReminders(initialFilters?: {
-  vehicleId?: string;
-  onlyActive?: boolean;
-}) {
+type Filters = { vehicleId?: string; onlyActive?: boolean };
+
+type RemindersHook = {
+  reminders: ReminderComputed[];
+  isLoading: boolean;
+  errorMessage: string | null;
+  filters: Filters;
+  reload: (f?: Partial<Filters>) => Promise<void>;
+  createRule: (payload: any) => Promise<void>;
+  updateRule: (id: string, payload: any) => Promise<void>;
+  deleteRule: (id: string) => Promise<void>;
+  markDone: (
+    id: string,
+    currentOdometer?: number,
+    doneAt?: string
+  ) => Promise<void>;
+  snoozeRule: (id: string, days: number) => Promise<void>; // <-- tipagem firme
+};
+
+export function useReminders(initialFilters?: Filters): RemindersHook {
   const [reminders, setReminders] = useState<ReminderComputed[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [filters, setFilters] = useState<{
-    vehicleId?: string;
-    onlyActive?: boolean;
-  }>(initialFilters ?? {});
+  const [filters, setFilters] = useState<Filters>(initialFilters ?? {});
 
   const reload = useCallback(
-    async (f?: Partial<typeof filters>) => {
+    async (f?: Partial<Filters>) => {
       try {
         setIsLoading(true);
         const next = { ...filters, ...(f ?? {}) };
@@ -51,7 +64,7 @@ export function useReminders(initialFilters?: {
 
   useEffect(() => {
     void reload();
-  }, []); // load inicial
+  }, []); // primeira carga
 
   async function createRule(payload: any) {
     const res = await fetch("/api/reminders", {
@@ -97,6 +110,18 @@ export function useReminders(initialFilters?: {
     await reload();
   }
 
+  async function snoozeRule(id: string, days: number) {
+    const res = await fetch(`/api/reminders/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "snooze", days }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j?.error || "Falha ao adiar lembrete.");
+    }
+    await reload();
+  }
+
   return {
     reminders,
     isLoading,
@@ -107,10 +132,11 @@ export function useReminders(initialFilters?: {
     updateRule,
     deleteRule,
     markDone,
+    snoozeRule,
   };
 }
 
-/** Hook só para contar lembretes em alerta (DUE_SOON/OVERDUE) */
+/** Contador para badge da sidebar */
 export function useReminderCount(opts?: {
   vehicleId?: string;
   onlyActive?: boolean;

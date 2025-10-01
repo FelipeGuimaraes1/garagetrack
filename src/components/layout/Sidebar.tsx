@@ -90,7 +90,7 @@ export function Sidebar() {
         >
           {isCollapsed ? "🔔" : "Lembretes"}
         </Link> */}
-        <RemindersNavItem />
+        <RemindersNavItem collapsed={isCollapsed} />
       </nav>
 
       {/* footer com usuário logado */}

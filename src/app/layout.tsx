@@ -1,5 +1,6 @@
 import { PageShell } from "@/components/PageShell";
 import { ReminderWatcher } from "@/components/reminders/ReminderWatcher";
+import { ToastProvider } from "@/components/ui/ToastProvider";
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -16,9 +17,11 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body>
-        <PageShell>{children}</PageShell>
+        <ToastProvider>
+          <PageShell>{children}</PageShell>
+          <ReminderWatcher />
+        </ToastProvider>
       </body>
-      <ReminderWatcher />
     </html>
   );
 }
