@@ -5,6 +5,7 @@ import { useReminders } from "@/hooks/useReminders";
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
 import { useState } from "react";
+import { MarkDoneDialog } from "./MarkDoneDialog";
 import { ReminderRuleForm } from "./ReminderRuleForm";
 
 export function ReminderList() {
@@ -24,6 +25,8 @@ export function ReminderList() {
   const [openForm, setOpenForm] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const [markId, setMarkId] = useState<string | null>(null);
 
   function colorByStatus(s: string) {
     if (s === "OVERDUE") return "border-[color:var(--danger)]/40";
@@ -76,17 +79,7 @@ export function ReminderList() {
                 <div className="shrink-0 flex gap-2">
                   <button
                     className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
-                    onClick={async () => {
-                      try {
-                        await markDone(r.id);
-                        showToast("Lembrete marcado como feito!", "success");
-                      } catch (e: any) {
-                        showToast(
-                          e.message || "Falha ao marcar como feito.",
-                          "error"
-                        );
-                      }
-                    }}
+                    onClick={() => setMarkId(r.id)}
                   >
                     Feito
                   </button>
@@ -147,6 +140,22 @@ export function ReminderList() {
             showToast(e.message || "Falha ao remover.", "error");
           } finally {
             setRemovingId(null);
+          }
+        }}
+      />
+
+      <MarkDoneDialog
+        open={Boolean(markId)}
+        onClose={() => setMarkId(null)}
+        onConfirm={async (odo, doneAt) => {
+          if (!markId) return;
+          try {
+            await markDone(markId, odo, doneAt);
+            showToast("Lembrete marcado como feito!", "success");
+          } catch (e: any) {
+            showToast(e.message || "Falha ao marcar como feito.", "error");
+          } finally {
+            setMarkId(null);
           }
         }}
       />

@@ -51,7 +51,7 @@ export function useReminders(initialFilters?: {
 
   useEffect(() => {
     void reload();
-  }, []); // inicial
+  }, []); // load inicial
 
   async function createRule(payload: any) {
     const res = await fetch("/api/reminders", {
@@ -77,10 +77,21 @@ export function useReminders(initialFilters?: {
     await reload();
   }
 
-  async function markDone(id: string, currentOdometer?: number) {
+  async function markDone(
+    id: string,
+    currentOdometer?: number,
+    doneAt?: string
+  ) {
     const res = await fetch(`/api/reminders/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ action: "markDone", currentOdometer }),
+      body: JSON.stringify({
+        action: "markDone",
+        currentOdometer:
+          typeof currentOdometer === "number" && !Number.isNaN(currentOdometer)
+            ? currentOdometer
+            : undefined,
+        doneAt,
+      }),
     });
     if (!res.ok) throw new Error("Falha ao marcar como feito.");
     await reload();
@@ -97,4 +108,35 @@ export function useReminders(initialFilters?: {
     deleteRule,
     markDone,
   };
+}
+
+/** Hook só para contar lembretes em alerta (DUE_SOON/OVERDUE) */
+export function useReminderCount(opts?: {
+  vehicleId?: string;
+  onlyActive?: boolean;
+}) {
+  const [count, setCount] = useState<number>(0);
+  const [loading, setLoading] = useState(false);
+
+  const reload = useCallback(async () => {
+    try {
+      setLoading(true);
+      const qs = new URLSearchParams();
+      if (opts?.vehicleId) qs.set("vehicleId", opts.vehicleId);
+      if (opts?.onlyActive ?? true) qs.set("onlyActive", "1");
+      const res = await fetch(`/api/reminders/count?${qs.toString()}`, {
+        cache: "no-store",
+      });
+      const json = await res.json();
+      setCount(json.count ?? 0);
+    } finally {
+      setLoading(false);
+    }
+  }, [opts?.vehicleId, opts?.onlyActive]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  return { count, loading, reload };
 }
