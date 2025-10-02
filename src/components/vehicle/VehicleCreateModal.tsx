@@ -3,7 +3,7 @@
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
-import { emitAppEvent } from "@/lib/events";
+import { emitAppEvent } from "@/lib/utils/events";
 import { maskOdometer, maskPlate } from "@/lib/utils/mask-br";
 import { useEffect, useRef, useState } from "react";
 

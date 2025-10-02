@@ -1,5 +1,10 @@
-import { endOfMonth, formatISO, startOfMonth, subMonths } from "@/lib/date";
-import { prisma } from "@/lib/prisma";
+import {
+  endOfMonth,
+  formatISO,
+  startOfMonth,
+  subMonths,
+} from "@/lib/utils/date";
+import { prisma } from "@/lib/utils/db";
 import { NextResponse } from "next/server";
 
 type SummaryResponse = {

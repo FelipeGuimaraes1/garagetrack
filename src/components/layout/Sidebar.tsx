@@ -3,35 +3,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { RemindersNavItem } from "../reminders/RemindersNavItem";
-
-type CurrentUser = {
-  id: string;
-  email: string;
-  name: string | null;
-  image: string | null;
-};
+import UserBadgeClient from "./UserBadgeClient";
 
 const STORAGE_KEY = "gt.sidebar.collapsed";
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
   useEffect(() => {
-    // restaura estado salvo
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) setIsCollapsed(saved === "1");
-
-    // carrega usuário (stub via /api/me)
-    (async () => {
-      try {
-        const response = await fetch("/api/me", { cache: "no-store" });
-        const json = await response.json();
-        if (response.ok) setCurrentUser(json.data);
-      } catch {
-        // silencioso
-      }
-    })();
   }, []);
 
   function toggle() {
@@ -68,50 +49,32 @@ export function Sidebar() {
       <nav className="p-3 space-y-2">
         <Link
           href="/dashboard"
-          className="block px-3 py-2 rounded-lg hover:ring-1 hover:ring-white/5 border border-transparent hover:border-[var(--border)]"
+          className="block px-3 py-2 rounded-lg hover:ring-1 hover:ring-white/5 border border-transparent hover:border-[var(--border)] truncate"
+          title="Dashboard"
         >
           {isCollapsed ? "📊" : "Dashboard"}
         </Link>
         <Link
           href="/vehicles"
-          className="block px-3 py-2 rounded-lg hover:ring-1 hover:ring-white/5 border border-transparent hover:border-[var(--border)]"
+          className="block px-3 py-2 rounded-lg hover:ring-1 hover:ring-white/5 border border-transparent hover:border-[var(--border)] truncate"
+          title="Veículos"
         >
           {isCollapsed ? "🚗" : "Veículos"}
         </Link>
         <Link
           href="/expenses"
-          className="block px-3 py-2 rounded-lg hover:ring-1 hover:ring-white/5 border border-transparent hover:border-[var(--border)]"
+          className="block px-3 py-2 rounded-lg hover:ring-1 hover:ring-white/5 border border-transparent hover:border-[var(--border)] truncate"
+          title="Despesas"
         >
           {isCollapsed ? "💳" : "Despesas"}
         </Link>
-        {/* <Link
-          href="/reminders"
-          className="block px-3 py-2 rounded-lg hover:ring-1 hover:ring-white/5 border border-transparent hover:border-[var(--border)]"
-        >
-          {isCollapsed ? "🔔" : "Lembretes"}
-        </Link> */}
+
         <RemindersNavItem collapsed={isCollapsed} />
       </nav>
 
-      {/* footer com usuário logado */}
+      {/* footer: usuário logado */}
       <div className="absolute inset-x-0 bottom-0 p-3 border-t border-[var(--border)]">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-white/10 grid place-items-center text-sm">
-            {currentUser?.name?.[0]?.toUpperCase() ??
-              currentUser?.email?.[0]?.toUpperCase() ??
-              "?"}
-          </div>
-          {!isCollapsed && (
-            <div className="min-w-0">
-              <div className="text-sm font-medium truncate">
-                {currentUser?.name ?? "Usuário Demo"}
-              </div>
-              <div className="text-xs text-[var(--muted)] truncate">
-                {currentUser?.email ?? "demo@garagetrack.dev"}
-              </div>
-            </div>
-          )}
-        </div>
+        <UserBadgeClient collapsed={isCollapsed} />
       </div>
     </aside>
   );

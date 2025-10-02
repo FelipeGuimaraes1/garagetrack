@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/prisma";
-import { diffDays, getCurrentOdometer } from "@/lib/reminders";
+import { prisma } from "@/lib/utils/db";
+import { diffDays, getCurrentOdometer } from "@/lib/utils/reminders";
 import { NextResponse } from "next/server";
 
 /** Conta quantos lembretes estão DUE_SOON ou OVERDUE (filtros opcionais) */

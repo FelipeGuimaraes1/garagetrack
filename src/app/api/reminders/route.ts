@@ -1,9 +1,9 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/utils/db";
 import {
   diffDays,
   getCurrentOdometer,
   ReminderComputed,
-} from "@/lib/reminders";
+} from "@/lib/utils/reminders";
 import { NextResponse } from "next/server";
 
 /** GET /api/reminders?vehicleId=...&onlyActive=1 */

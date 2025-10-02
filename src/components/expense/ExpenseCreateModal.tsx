@@ -8,7 +8,7 @@ import { useReminders } from "@/hooks/useReminders";
 import { useToast } from "@/hooks/useToast";
 import { UploadedAttachment } from "@/hooks/useUpload";
 import { useVehicles } from "@/hooks/useVehicles";
-import { emitAppEvent } from "@/lib/events";
+import { emitAppEvent } from "@/lib/utils/events";
 import {
   maskCurrencyBRL,
   maskLiters2,

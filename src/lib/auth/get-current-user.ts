@@ -1,7 +1,7 @@
 // Termo: "stub" = implementação temporária simulada.
 // Aqui buscamos (ou criamos) o usuário de demo do seed para autenticação básica de dev.
 
-import { prisma } from "@/lib/db";
+import { prisma } from "@/lib/utils/db";
 
 export async function getCurrentUserId(): Promise<string> {
   const demoEmail = "demo@garagetrack.dev";

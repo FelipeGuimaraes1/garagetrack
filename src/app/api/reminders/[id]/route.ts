@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/utils/db";
 import { NextResponse } from "next/server";
 
 /** PATCH /api/reminders/:id

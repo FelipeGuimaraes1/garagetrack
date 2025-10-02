@@ -1,71 +1,52 @@
-import { getCurrentUserId } from "@/lib/auth/get-current-user";
-import { prisma } from "@/lib/db";
-import { expenseUpdateSchema } from "@/lib/validations/expense";
+import { authOptions } from "@/lib/auth/auth";
+import { prisma } from "@/lib/utils/db";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
-type RouteParams = { params: { id: string } };
+/** PATCH /api/expenses/:id */
+export async function PATCH(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-export async function PATCH(request: Request, { params }: RouteParams) {
-  try {
-    const userId = await getCurrentUserId();
-    const json = await request.json();
-    const parsed = expenseUpdateSchema.safeParse(json);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.format() },
-        { status: 400 }
-      );
-    }
+  const body = await req.json().catch(() => ({}));
 
-    const updated = await prisma.expense.update({
-      where: { id: params.id },
-      data: {
-        ...parsed.data,
-        date: parsed.data.date ? new Date(parsed.data.date) : undefined,
-      },
-    });
+  const updated = await prisma.expense.update({
+    where: { id: params.id, AND: { userId: (session.user as any).id } },
+    data: {
+      vehicleId: body.vehicleId,
+      type: body.type,
+      status: body.status,
+      date: body.date ? new Date(body.date) : undefined,
+      amount: body.amount,
+      description: body.description,
+      km: body.km ?? null,
+      fuelLiters: body.fuelLiters ?? null,
+      pricePerLiter: body.pricePerLiter ?? null,
+      fuelType: body.fuelType ?? null,
+      station: body.station ?? null,
+    },
+    include: { attachments: true },
+  });
 
-    if (updated.userId !== userId) {
-      return NextResponse.json({ error: "Não autorizado." }, { status: 403 });
-    }
-
-    return NextResponse.json({ data: updated });
-  } catch (error: any) {
-    if (error?.code === "P2025") {
-      return NextResponse.json(
-        { error: "Despesa não encontrada." },
-        { status: 404 }
-      );
-    }
-    return NextResponse.json(
-      { error: "Não foi possível atualizar a despesa." },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json(updated, { status: 200 });
 }
 
-export async function DELETE(_request: Request, { params }: RouteParams) {
-  try {
-    const userId = await getCurrentUserId();
-    const expense = await prisma.expense.findUnique({
-      where: { id: params.id },
-    });
-    if (!expense) {
-      return NextResponse.json(
-        { error: "Despesa não encontrada." },
-        { status: 404 }
-      );
-    }
-    if (expense.userId !== userId) {
-      return NextResponse.json({ error: "Não autorizado." }, { status: 403 });
-    }
+/** DELETE /api/expenses/:id */
+export async function DELETE(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    await prisma.expense.delete({ where: { id: params.id } });
-    return NextResponse.json({ success: true });
-  } catch (_error) {
-    return NextResponse.json(
-      { error: "Não foi possível remover a despesa." },
-      { status: 500 }
-    );
-  }
+  await prisma.expense.delete({
+    where: { id: params.id, AND: { userId: (session.user as any).id } },
+  });
+
+  return NextResponse.json({ ok: true }, { status: 200 });
 }

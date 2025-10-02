@@ -3,7 +3,7 @@
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useExpenses } from "@/hooks/useExpenses";
 import { useToast } from "@/hooks/useToast";
-import { emitAppEvent, onAppEvent } from "@/lib/events";
+import { emitAppEvent, onAppEvent } from "@/lib/utils/events";
 import { formatCurrencyBRL } from "@/lib/utils/formatters";
 import { Edit2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";

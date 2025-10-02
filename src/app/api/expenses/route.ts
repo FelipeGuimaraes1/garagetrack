@@ -1,136 +1,75 @@
-import { getCurrentUserId } from "@/lib/auth/get-current-user";
-import { prisma } from "@/lib/db";
-import {
-  expenseCreateSchema,
-  expenseListQuerySchema,
-} from "@/lib/validations/expense";
+import { authOptions } from "@/lib/auth/auth";
+import { prisma } from "@/lib/utils/db";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
-export async function GET(request: Request) {
-  try {
-    const userId = await getCurrentUserId();
-    const { searchParams } = new URL(request.url);
+/** GET /api/expenses?vehicleId=...&type=...&month=YYYY-MM */
+export async function GET(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const parsed = expenseListQuerySchema.safeParse({
-      vehicleId: searchParams.get("vehicleId") || undefined,
-      type: (searchParams.get("type") as any) || undefined,
-      dateFrom: searchParams.get("dateFrom") || undefined,
-      dateTo: searchParams.get("dateTo") || undefined,
-      page: searchParams.get("page") || undefined,
-      pageSize: searchParams.get("pageSize") || undefined,
-    });
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.format() },
-        { status: 400 }
-      );
-    }
+  const { searchParams } = new URL(req.url);
+  const vehicleId = searchParams.get("vehicleId") || undefined;
+  const type = searchParams.get("type") || undefined;
+  const month = searchParams.get("month") || undefined;
 
-    const { vehicleId, type, dateFrom, dateTo, page, pageSize } = parsed.data;
-
-    const where: any = { userId };
-    if (vehicleId) where.vehicleId = vehicleId;
-    if (type) where.type = type;
-    if (dateFrom || dateTo) {
-      where.date = {};
-      if (dateFrom) where.date.gte = new Date(dateFrom);
-      if (dateTo) where.date.lte = new Date(dateTo);
-    }
-
-    const totalCount = await prisma.expense.count({ where });
-    const data = await prisma.expense.findMany({
-      where,
-      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: { attachments: true, vehicle: true },
-    });
-
-    return NextResponse.json({
-      data,
-      page,
-      pageSize,
-      totalCount,
-      totalPages: Math.ceil(totalCount / pageSize),
-    });
-  } catch (_error) {
-    return NextResponse.json(
-      { error: "Não foi possível listar as despesas." },
-      { status: 500 }
-    );
+  const where: any = { userId: (session.user as any).id };
+  if (vehicleId) where.vehicleId = vehicleId;
+  if (type) where.type = type;
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    const [y, m] = month.split("-").map((n) => parseInt(n, 10));
+    const from = new Date(y, m - 1, 1);
+    const to = new Date(y, m, 1);
+    where.date = { gte: from, lt: to };
   }
+
+  const list = await prisma.expense.findMany({
+    where,
+    include: {
+      attachments: true,
+      vehicle: { select: { nickname: true, plate: true } },
+    },
+    orderBy: { date: "desc" },
+  });
+
+  return NextResponse.json(list, { status: 200 });
 }
 
-export async function POST(request: Request) {
-  try {
-    const userId = await getCurrentUserId();
-    const json = await request.json();
-    const parsed = expenseCreateSchema.safeParse(json);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.format() },
-        { status: 400 }
-      );
-    }
+/** POST /api/expenses  -> cria despesa para o usuário logado */
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const {
-      vehicleId,
-      type,
-      status,
-      date,
-      amount,
-      description,
-      km,
-      fuelLiters,
-      pricePerLiter,
-      fuelType,
-      station,
-    } = parsed.data;
+  const body = await req.json().catch(() => ({}));
 
-    // attachments opcionais vindos do client (não fazem parte do schema zod principal)
-    const attachments = Array.isArray((json as any).attachments)
-      ? (json as any).attachments
-      : [];
-
-    // Garantir que o veículo pertence ao usuário
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: vehicleId },
-    });
-    if (!vehicle || vehicle.userId !== userId) {
-      return NextResponse.json({ error: "Veículo inválido." }, { status: 400 });
-    }
-
-    const created = await prisma.expense.create({
-      data: {
-        userId,
-        vehicleId,
-        type,
-        status: status ?? "PENDENTE",
-        date: new Date(date),
-        amount,
-        description,
-        km: km ?? null,
-        fuelLiters: fuelLiters ?? null,
-        pricePerLiter: pricePerLiter ?? null,
-        fuelType: fuelType ?? null,
-        station: station ?? null,
-        ...(attachments.length && {
-          attachments: {
-            create: attachments.map((a: any) => ({
+  const created = await prisma.expense.create({
+    data: {
+      userId: (session.user as any).id,
+      vehicleId: body.vehicleId,
+      type: body.type,
+      status: body.status,
+      date: new Date(body.date),
+      amount: body.amount,
+      description: body.description,
+      km: body.km ?? null,
+      fuelLiters: body.fuelLiters ?? null,
+      pricePerLiter: body.pricePerLiter ?? null,
+      fuelType: body.fuelType ?? null,
+      station: body.station ?? null,
+      attachments: body.attachments?.length
+        ? {
+            create: body.attachments.map((a: any) => ({
               url: a.url,
               contentType: a.contentType ?? null,
-              size: typeof a.size === "number" ? a.size : null,
+              size: a.size ?? null,
             })),
-          },
-        }),
-      },
-    });
+          }
+        : undefined,
+    },
+    include: { attachments: true },
+  });
 
-    return NextResponse.json({ data: created }, { status: 201 });
-  } catch (_error) {
-    return NextResponse.json(
-      { error: "Não foi possível criar a despesa." },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json(created, { status: 201 });
 }

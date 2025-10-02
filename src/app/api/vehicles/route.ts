@@ -1,61 +1,36 @@
-import { getCurrentUserId } from "@/lib/auth/get-current-user";
-import { prisma } from "@/lib/db";
-import { normalizePlate } from "@/lib/utils/formatters";
-import { vehicleCreateSchema } from "@/lib/validations/vehicle";
+import { authOptions } from "@/lib/auth/auth";
+import { prisma } from "@/lib/utils/db";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
+/** GET /api/vehicles  -> lista veículos do usuário logado */
 export async function GET() {
-  try {
-    const userId = await getCurrentUserId();
-    const vehicles = await prisma.vehicle.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    });
-    return NextResponse.json({ data: vehicles });
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Não foi possível listar os veículos." },
-      { status: 500 }
-    );
-  }
+  const session = await getServerSession(authOptions);
+  if (!session?.user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const list = await prisma.vehicle.findMany({
+    where: { userId: (session.user as any).id },
+    orderBy: { createdAt: "desc" },
+  });
+  return NextResponse.json(list, { status: 200 });
 }
 
-export async function POST(request: Request) {
-  try {
-    const userId = await getCurrentUserId();
-    const json = await request.json();
-    const parsed = vehicleCreateSchema.safeParse(json);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.format() },
-        { status: 400 }
-      );
-    }
+/** POST /api/vehicles  -> cria veículo para o usuário */
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { nickname, plate, fuelDefault, odometerKm } = parsed.data;
-
-    const created = await prisma.vehicle.create({
-      data: {
-        userId,
-        nickname: nickname ?? null,
-        plate: plate ? normalizePlate(plate) : null,
-        fuelDefault: fuelDefault ?? null,
-        odometerKm: odometerKm ?? null,
-      },
-    });
-
-    return NextResponse.json({ data: created }, { status: 201 });
-  } catch (error: any) {
-    // Trata violação de unique (placa por usuário)
-    if (error?.code === "P2002") {
-      return NextResponse.json(
-        { error: "Já existe um veículo com essa placa para este usuário." },
-        { status: 409 }
-      );
-    }
-    return NextResponse.json(
-      { error: "Não foi possível criar o veículo." },
-      { status: 500 }
-    );
-  }
+  const body = await req.json().catch(() => ({}));
+  const created = await prisma.vehicle.create({
+    data: {
+      userId: (session.user as any).id,
+      nickname: body.nickname || null,
+      plate: body.plate || null,
+      odometerKm: body.odometerKm ?? null,
+      fuelDefault: body.fuelDefault ?? null,
+    },
+  });
+  return NextResponse.json(created, { status: 201 });
 }
