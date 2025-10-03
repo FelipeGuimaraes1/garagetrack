@@ -73,6 +73,7 @@ export function useExpenses(initialFilters?: ExpenseFilters) {
       const qs = buildQueryString(merged);
       const response = await fetch(`/api/expenses?${qs}`, {
         cache: "no-store",
+        credentials: "include",
       });
       const json = await response.json();
       if (!response.ok)

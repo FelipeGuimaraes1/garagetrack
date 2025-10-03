@@ -18,7 +18,10 @@ export function RemindersCard() {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const res = await fetch("/api/reminders/upcoming", { cache: "no-store" });
+      const res = await fetch("/api/reminders/upcoming", {
+        cache: "no-store",
+        credentials: "include",
+      });
       const json = await res.json();
       setData(json);
       setLoading(false);

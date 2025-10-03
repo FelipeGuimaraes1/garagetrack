@@ -1,120 +1,112 @@
-import {
-  endOfMonth,
-  formatISO,
-  startOfMonth,
-  subMonths,
-} from "@/lib/utils/date";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/utils/db";
+import { ExpenseType, Prisma } from "@prisma/client";
+import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
 
-type SummaryResponse = {
-  monthISO: string;
-  totalThisMonth: number;
-  totalPrevMonth: number;
-  avgTicketThisMonth: number;
-  countThisMonth: number;
-  byVehicle: Array<{ vehicleId: string; label: string; total: number }>;
-  lastMonths: Array<{ monthISO: string; total: number }>;
-};
+type MonthAgg = { monthISO: string; total: number };
 
-type GroupedByVehicle = { vehicleId: string; _sum: { amount: number | null } };
-
-/** GET /api/analytics?month=YYYY-MM&vehicleId=...&type=ABASTECIMENTO|MANUTENCAO|... */
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const monthParam = searchParams.get("month"); // "2025-09"
-  const vehicleId = searchParams.get("vehicleId") || ""; // vazio = todos
-  const typeParam = searchParams.get("type") || ""; // vazio = todos
-
-  const baseDate = monthParam
-    ? new Date(`${monthParam}-01T00:00:00`)
-    : new Date();
-  const from = startOfMonth(baseDate);
-  const to = endOfMonth(baseDate);
-
-  const prevFrom = startOfMonth(subMonths(from, 1));
-  const prevTo = endOfMonth(subMonths(from, 1));
-
-  // where base: somente despesas pagas
-  const baseWhere: any = { status: "PAGO" as const };
-  if (vehicleId) baseWhere.vehicleId = vehicleId;
-  if (typeParam) baseWhere.type = typeParam;
-
-  // mês atual
-  const [sumThis, countThis] = await Promise.all([
-    prisma.expense.aggregate({
-      where: { ...baseWhere, date: { gte: from, lte: to } },
-      _sum: { amount: true },
-    }),
-    prisma.expense.count({
-      where: { ...baseWhere, date: { gte: from, lte: to } },
-    }),
-  ]);
-  const totalThisMonth = Number(sumThis._sum.amount ?? 0);
-  const countThisMonth = countThis;
-  const avgTicketThisMonth = countThisMonth
-    ? totalThisMonth / countThisMonth
-    : 0;
-
-  // mês anterior (mesmos filtros vehicleId/type)
-  const sumPrev = await prisma.expense.aggregate({
-    where: { ...baseWhere, date: { gte: prevFrom, lte: prevTo } },
-    _sum: { amount: true },
-  });
-  const totalPrevMonth = Number(sumPrev._sum.amount ?? 0);
-
-  // por veículo no mês atual (respeita o filtro de type; se já tem vehicleId, cairá 1 item)
-  const grouped = (await prisma.expense.groupBy({
-    by: ["vehicleId"],
-    where: { ...baseWhere, date: { gte: from, lte: to } },
-    _sum: { amount: true },
-  })) as unknown as GroupedByVehicle[];
-
-  const ids = grouped.map((g) => g.vehicleId);
-  const vehicles =
-    ids.length > 0
-      ? await prisma.vehicle.findMany({
-          where: { id: { in: ids } },
-          select: { id: true, nickname: true, plate: true },
-        })
-      : [];
-
-  const map = new Map(vehicles.map((v) => [v.id, v]));
-  const byVehicle = grouped
-    .map((g) => {
-      const v = map.get(g.vehicleId);
-      return {
-        vehicleId: g.vehicleId,
-        label: v?.nickname || v?.plate || "Veículo",
-        total: Number(g._sum.amount ?? 0),
-      };
-    })
-    .sort((a, b) => b.total - a.total);
-
-  // série últimos 6 meses (sempre com os filtros atuais)
-  const lastMonths: Array<{ monthISO: string; total: number }> = [];
-  for (let i = 5; i >= 0; i--) {
-    const mFrom = startOfMonth(subMonths(from, i));
-    const mTo = endOfMonth(subMonths(from, i));
-    const ag = await prisma.expense.aggregate({
-      where: { ...baseWhere, date: { gte: mFrom, lte: mTo } },
-      _sum: { amount: true },
-    });
-    lastMonths.push({
-      monthISO: formatISO(mFrom, "month"),
-      total: Number(ag._sum.amount ?? 0),
-    });
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = (session.user as any).id as string;
 
-  const out: SummaryResponse = {
-    monthISO: formatISO(from, "month"),
-    totalThisMonth,
-    totalPrevMonth,
-    avgTicketThisMonth,
-    countThisMonth,
-    byVehicle,
-    lastMonths,
+  const { searchParams } = new URL(req.url);
+  const month =
+    searchParams.get("month") ?? new Date().toISOString().slice(0, 7);
+  const vehicleId = searchParams.get("vehicleId") || undefined;
+  const typeStr = searchParams.get("type") || undefined;
+
+  // converte string -> enum do Prisma (se vier vazio, ignora)
+  const typeEnum: ExpenseType | undefined = typeStr
+    ? (typeStr as ExpenseType)
+    : undefined;
+
+  const [y, m] = month.split("-").map((n) => parseInt(n, 10));
+  const start = new Date(y, m - 1, 1);
+  const end = new Date(y, m, 1);
+
+  // Tipamos explicitamente como ExpenseWhereInput
+  const whereBase: Prisma.ExpenseWhereInput = {
+    userId,
+    date: { gte: start, lt: end },
+    ...(vehicleId ? { vehicleId } : {}),
+    ...(typeEnum ? { type: typeEnum } : {}),
   };
 
-  return NextResponse.json(out, { status: 200 });
+  const [sumThis, countThis, sumPrev, byVehicleRows, lastMonthsRows] =
+    await Promise.all([
+      prisma.expense.aggregate({ _sum: { amount: true }, where: whereBase }),
+      prisma.expense.count({ where: whereBase }),
+      prisma.expense.aggregate({
+        _sum: { amount: true },
+        where: {
+          userId,
+          date: { gte: new Date(y, m - 2, 1), lt: new Date(y, m - 1, 1) },
+          ...(vehicleId ? { vehicleId } : {}),
+          ...(typeEnum ? { type: typeEnum } : {}),
+        },
+      }),
+      prisma.expense.groupBy({
+        by: ["vehicleId"],
+        _sum: { amount: true },
+        where: whereBase,
+      }),
+      // últimos 6 meses
+      (async () => {
+        const arr: MonthAgg[] = [];
+        for (let i = 5; i >= 0; i--) {
+          const ms = new Date(y, m - 1 - i, 1);
+          const me = new Date(y, m - i, 1);
+          const sum = await prisma.expense.aggregate({
+            _sum: { amount: true },
+            where: {
+              userId,
+              date: { gte: ms, lt: me },
+              ...(vehicleId ? { vehicleId } : {}),
+              ...(typeEnum ? { type: typeEnum } : {}),
+            },
+          });
+          arr.push({
+            monthISO: `${ms.getFullYear()}-${String(ms.getMonth() + 1).padStart(
+              2,
+              "0"
+            )}`,
+            total: Number(sum._sum?.amount ?? 0), // <- usa ?. e ??
+          });
+        }
+        return arr;
+      })(),
+    ]);
+
+  const byVehicle = await Promise.all(
+    byVehicleRows.map(async (r) => {
+      const v = await prisma.vehicle.findUnique({ where: { id: r.vehicleId } });
+      return {
+        vehicleId: r.vehicleId,
+        label: v?.nickname || v?.plate || "Veículo",
+        total: Number(r._sum?.amount ?? 0), // <- usa ?. e ??
+      };
+    })
+  );
+
+  return NextResponse.json(
+    {
+      monthISO: month,
+      totalThisMonth: Number(sumThis._sum?.amount ?? 0), // <- usa ?. e ??
+      totalPrevMonth: Number(sumPrev._sum?.amount ?? 0),
+      avgTicketThisMonth: countThis
+        ? Number(sumThis._sum?.amount ?? 0) / countThis
+        : 0,
+      countThisMonth: countThis,
+      byVehicle,
+      lastMonths: lastMonthsRows,
+    },
+    { status: 200 }
+  );
 }

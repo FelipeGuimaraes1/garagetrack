@@ -1,5 +1,6 @@
 "use client";
 
+import { apiPost } from "@/lib/http";
 import { signIn } from "next-auth/react";
 import { FormEvent, useState } from "react";
 
@@ -15,15 +16,11 @@ export default function SignUpPage() {
     setSubmitting(true);
     setError(null);
 
-    const res = await fetch("/api/register", {
-      method: "POST",
-      body: JSON.stringify({ name, email, password }),
-    });
-
-    setSubmitting(false);
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      setError(j?.error || "Falha ao cadastrar.");
+    try {
+      await apiPost("/api/register", { name, email, password });
+    } catch (err: any) {
+      setSubmitting(false);
+      setError(err?.message || "Falha ao cadastrar.");
       return;
     }
 

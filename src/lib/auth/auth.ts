@@ -1,59 +1,69 @@
 import { prisma } from "@/lib/utils/db";
-import { verifyPassword } from "@/lib/utils/password";
-import { PrismaAdapter } from "@auth/prisma-adapter";
+import bcrypt from "bcryptjs";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 
-/**
- * NextAuth v4 (estável).
- * - Adapter Prisma
- * - Sessão via "database" (tabela Session)
- * - Providers: Google e Credentials
- */
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
-  session: { strategy: "database" },
-  pages: { signIn: "/signin" },
+  secret: process.env.NEXTAUTH_SECRET,
+  session: { strategy: "jwt" },
+
   providers: [
-    GoogleProvider({
-      clientId: process.env.AUTH_GOOGLE_ID ?? "",
-      clientSecret: process.env.AUTH_GOOGLE_SECRET ?? "",
-    }),
     CredentialsProvider({
-      name: "credentials",
+      name: "Credentials",
       credentials: {
-        email: { label: "E-mail", type: "email" },
+        email: { label: "Email", type: "email" },
         password: { label: "Senha", type: "password" },
       },
-      authorize: async (credentials) => {
-        const email = (credentials?.email || "")
-          .toString()
-          .trim()
-          .toLowerCase();
-        const password = (credentials?.password || "").toString();
-        if (!email || !password) return null;
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials.password) return null;
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email },
+        });
         if (!user?.passwordHash) return null;
 
-        const ok = await verifyPassword(password, user.passwordHash);
+        const ok = await bcrypt.compare(
+          credentials.password,
+          user.passwordHash
+        );
         if (!ok) return null;
 
         return {
           id: user.id,
-          name: user.name ?? undefined,
-          email: user.email ?? undefined,
-          image: user.image ?? undefined,
+          email: user.email,
+          name: user.name ?? null,
+          image: user.image ?? null,
         };
       },
     }),
+
+    ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
+      ? [
+          GoogleProvider({
+            clientId: process.env.AUTH_GOOGLE_ID!,
+            clientSecret: process.env.AUTH_GOOGLE_SECRET!,
+          }),
+        ]
+      : []),
   ],
+
   callbacks: {
-    async session({ session, token, user }) {
-      const id = user?.id ?? (token?.sub as string | undefined);
-      if (session.user && id) (session.user as any).id = id;
+    async jwt({ token, user }) {
+      if (user) {
+        // grava o id do banco dentro do token
+        (token as any).id = (user as any).id ?? token.sub;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user && token) {
+        // expõe o id no session.user.id
+        (session.user as any).id = (token as any).id;
+      }
       return session;
     },
   },
 };
+
+export default authOptions;

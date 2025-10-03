@@ -23,7 +23,10 @@ export function useVehicles() {
   async function loadVehicles() {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/vehicles", { cache: "no-store" });
+      const response = await fetch("/api/vehicles", {
+        cache: "no-store",
+        credentials: "include",
+      });
       const json = await response.json();
       if (!response.ok)
         throw new Error(json?.error || "Falha ao carregar veículos.");

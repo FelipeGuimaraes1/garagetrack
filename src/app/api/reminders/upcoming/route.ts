@@ -1,11 +1,19 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/utils/db";
 import { diffDays, getCurrentOdometer } from "@/lib/utils/reminders";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
-/** TOP 3 próximos lembretes (mistura data e km) */
+/** TOP 3 próximos lembretes (mistura data e km) — respeita o usuário logado */
 export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json([], { status: 200 });
+
   const rules = await prisma.reminderRule.findMany({
-    where: { isActive: true },
+    where: { userId: (session.user as any).id, isActive: true },
     include: { vehicle: { select: { id: true, nickname: true, plate: true } } },
   });
 
@@ -29,11 +37,11 @@ export async function GET() {
     // por data fixa
     if (r.dueDate) {
       const days = diffDays(today, r.dueDate);
-      bestScore = Math.max(days, -365); // quanto menor, mais urgente (pode ser negativo)
+      bestScore = Math.max(days, -365);
       bestHint = days <= 0 ? `vencido há ${Math.abs(days)} d` : `em ${days} d`;
     }
 
-    // por dias
+    // por dias (recorrente)
     if (r.everyDays) {
       const ref = r.lastDoneAt ?? r.createdAt;
       const next = new Date(ref);
@@ -52,8 +60,8 @@ export async function GET() {
       const odo = await getCurrentOdometer(r.vehicleId);
       if (odo != null) {
         const since = odo - (r.lastDoneKm ?? 0);
-        const left = r.everyKm - since; // pode ser <= 0
-        const score = left / 50; // normalizo para a mesma ordem de grandeza de "dias"
+        const left = r.everyKm - since;
+        const score = left / 50; // normaliza
         if (bestScore === null || score < bestScore) {
           bestScore = score;
           bestHint =

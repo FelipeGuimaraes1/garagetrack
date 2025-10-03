@@ -11,7 +11,10 @@ export function ReminderWatcher() {
 
   async function check() {
     try {
-      const res = await fetch("/api/reminders", { cache: "no-store" });
+      const res = await fetch("/api/reminders", {
+        cache: "no-store",
+        credentials: "include",
+      });
       if (!res.ok) return;
       const list: Array<{ status: string; title: string }> = await res.json();
       const alerts = list.filter(

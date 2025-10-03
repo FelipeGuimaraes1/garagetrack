@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/utils/db";
 import { getServerSession } from "next-auth";

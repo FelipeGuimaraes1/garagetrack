@@ -47,6 +47,7 @@ export function useReminders(initialFilters?: Filters): RemindersHook {
         if (next.onlyActive) qs.set("onlyActive", "1");
         const res = await fetch(`/api/reminders?${qs.toString()}`, {
           cache: "no-store",
+          credentials: "include",
         });
         if (!res.ok) throw new Error("Erro ao carregar lembretes.");
         const data: ReminderComputed[] = await res.json();
@@ -152,6 +153,7 @@ export function useReminderCount(opts?: {
       if (opts?.onlyActive ?? true) qs.set("onlyActive", "1");
       const res = await fetch(`/api/reminders/count?${qs.toString()}`, {
         cache: "no-store",
+        credentials: "include",
       });
       const json = await res.json();
       setCount(json.count ?? 0);
