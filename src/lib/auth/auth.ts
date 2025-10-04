@@ -1,69 +1,75 @@
 import { prisma } from "@/lib/utils/db";
-import bcrypt from "bcryptjs";
-import type { NextAuthOptions } from "next-auth";
+import { PrismaAdapter } from "@auth/prisma-adapter"; // <-- ADAPTER
+import { compare } from "bcryptjs";
+import NextAuth, { type NextAuthOptions, getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 
 export const authOptions: NextAuthOptions = {
-  secret: process.env.NEXTAUTH_SECRET,
+  // mantém JWT; o adapter persiste User/Account/Session/VerificationToken
   session: { strategy: "jwt" },
+  adapter: PrismaAdapter(prisma), // <-- LIGA O ADAPTER
+
+  pages: { signIn: "/signin" },
 
   providers: [
+    GoogleProvider({
+      clientId: process.env.AUTH_GOOGLE_ID ?? "",
+      clientSecret: process.env.AUTH_GOOGLE_SECRET ?? "",
+      // se você já tem usuário criado por credentials com o mesmo e-mail,
+      // isso permite vincular a conta Google ao mesmo user:
+      allowDangerousEmailAccountLinking: true,
+    }),
+
     CredentialsProvider({
-      name: "Credentials",
+      name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        email: { label: "E-mail", type: "email" },
         password: { label: "Senha", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials.password) return null;
+        const email = credentials?.email?.trim().toLowerCase();
+        const password = credentials?.password ?? "";
+        if (!email || !password) return null;
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            image: true,
+            passwordHash: true,
+          },
         });
-        if (!user?.passwordHash) return null;
 
-        const ok = await bcrypt.compare(
-          credentials.password,
-          user.passwordHash
-        );
+        if (!user || !user.passwordHash) return null;
+        const ok = await compare(password, user.passwordHash);
         if (!ok) return null;
 
         return {
           id: user.id,
           email: user.email,
-          name: user.name ?? null,
+          name: user.name ?? user.email,
           image: user.image ?? null,
-        };
+        } as any;
       },
     }),
-
-    ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
-      ? [
-          GoogleProvider({
-            clientId: process.env.AUTH_GOOGLE_ID!,
-            clientSecret: process.env.AUTH_GOOGLE_SECRET!,
-          }),
-        ]
-      : []),
   ],
 
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        // grava o id do banco dentro do token
-        (token as any).id = (user as any).id ?? token.sub;
-      }
-      return token;
-    },
     async session({ session, token }) {
-      if (session.user && token) {
-        // expõe o id no session.user.id
-        (session.user as any).id = (token as any).id;
+      if (session.user && token.sub) {
+        (session.user as any).id = token.sub; // id disponível na sessão
       }
       return session;
     },
   },
 };
 
-export default authOptions;
+// helper p/ server components
+export const getSession = () => getServerSession(authOptions);
+
+// rota app/api/auth/[...nextauth]/route.ts
+const handler = NextAuth(authOptions);
+export { handler as GET, handler as POST };

@@ -55,6 +55,7 @@ model User {
   passwordHash String?                          // hash de senha (se usar Credentials)
   createdAt    DateTime  @default(now())         // data/hora de criação
   updatedAt    DateTime  @updatedAt              // atualiza automaticamente a cada update
+  emailVerified DateTime?                       // requerido pelo PrismaAdapter (NextAuth)
 
   // Relacionamentos de domínio
   vehicles     Vehicle[]                         // 1:N -> veículos do usuário
