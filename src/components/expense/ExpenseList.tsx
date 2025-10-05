@@ -4,7 +4,7 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useExpenses } from "@/hooks/useExpenses";
 import { useToast } from "@/hooks/useToast";
 import { emitAppEvent, onAppEvent } from "@/lib/utils/events";
-import { formatCurrencyBRL } from "@/lib/utils/formatters";
+import { formatCurrencyBRL, formatDateBR } from "@/lib/utils/formatters";
 import { Edit2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ExpenseEditModal } from "./ExpenseEditModal";
@@ -58,7 +58,7 @@ export function ExpenseList() {
                 <div className="font-medium">
                   {e.type}{" "}
                   <span className="text-sm text-[var(--muted)]">
-                    · {new Date(e.date).toLocaleDateString("pt-BR")}
+                    · {formatDateBR(e.date)}
                   </span>
                 </div>
                 <div className="text-sm text-[var(--muted)]">

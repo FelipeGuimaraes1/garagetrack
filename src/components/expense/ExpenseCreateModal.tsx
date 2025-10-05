@@ -1,4 +1,4 @@
-// "use client";
+"use client";
 
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ReminderRuleForm } from "@/components/reminders/ReminderRuleForm";
@@ -15,6 +15,7 @@ import {
   maskPricePerLiter2,
   unmaskCurrencyBRL,
 } from "@/lib/utils/mask-br";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ReceiptUploader } from "./ReceiptUploader";
 
@@ -30,11 +31,17 @@ const types = [
 ] as const;
 const fuelTypes = ["GASOLINA", "ETANOL", "DIESEL", "GNV"] as const;
 
+// permite dígitos e vírgula; remove qualquer coisa diferente
+function maskKmComma(v: string) {
+  return v.replace(/[^\d,]/g, "");
+}
+
 export function ExpenseCreateModal({ open, onClose }: Props) {
+  const router = useRouter();
   const { vehicles } = useVehicles();
   const { createExpense, reload } = useExpenses();
   const { showToast } = useToast();
-  const reminders = useReminders(); // para criar lembrete logo depois
+  const reminders = useReminders();
 
   const [vehicleId, setVehicleId] = useState("");
   const [type, setType] = useState<(typeof types)[number]>("ABASTECIMENTO");
@@ -44,7 +51,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   );
   const [amountMasked, setAmountMasked] = useState("");
   const [description, setDescription] = useState("");
-  const [km, setKm] = useState("");
+  const [km, setKm] = useState(""); // agora aceita vírgula
 
   const [fuelLitersMasked, setFuelLitersMasked] = useState("");
   const [pricePerLiterMasked, setPricePerLiterMasked] = useState("");
@@ -80,6 +87,19 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
     e.preventDefault();
 
     try {
+      // km: aceita vírgula mas converte para inteiro (schema espera Int)
+      // ex.: "352,54" -> 352 (arredonda)
+      const kmNumber =
+        km.trim() === ""
+          ? null
+          : Math.round(
+              Number(
+                km
+                  .replace(/\./g, "") // se alguém colar com ponto
+                  .replace(",", ".")
+              )
+            );
+
       const payload: any = {
         vehicleId,
         type,
@@ -87,7 +107,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         date,
         amount: unmaskCurrencyBRL(amountMasked),
         description,
-        km: km ? Number(km) : null,
+        km: kmNumber,
       };
 
       if (isAbastecimento) {
@@ -112,16 +132,18 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
       await createExpense(payload);
       emitAppEvent("gt:expenses:changed");
       showToast("Despesa criada com sucesso!", "success");
-      await reload();
 
-      // Perguntar lembrete se for MANUTENCAO
+      // recarrega hook e força “fresh data”
+      await reload().catch(() => {});
+      router.refresh();
+
+      // Perguntar lembrete se for manutenção
       if (type === "MANUTENCAO") {
         setPrefillReminder({
           vehicleId,
           type: "SERVICE",
           title: "Próxima manutenção",
           notes: "",
-          // base: usuário escolhe no modal; poderíamos sugerir com base na descrição ou um default
         });
         setAskReminder(true);
       } else {
@@ -147,17 +169,15 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
     const liters = Number(
       fuelLitersMasked.replace(/\./g, "").replace(",", ".")
     );
-    const currentKm = km ? Number(km) : NaN;
-    if (!liters || !currentKm || Number.isNaN(currentKm)) return "";
-    return `Consumo: ${(currentKm / liters).toFixed(2)} km/L`;
+    const kmNum =
+      km.trim() === "" ? NaN : Number(km.replace(/\./g, "").replace(",", ".")); // aqui pode ser decimal
+    if (!liters || !kmNum || Number.isNaN(kmNum)) return "";
+    return `Consumo: ${(kmNum / liters).toFixed(2)} km/L`;
   }, [isAbastecimento, fuelLitersMasked, km]);
 
-  // A11y: focus trap + Esc + overlay click
+  // A11y
   const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(
-    panelRef as unknown as React.RefObject<HTMLElement | null>,
-    open
-  );
+  useFocusTrap(panelRef as any, open);
   useEffect(() => {
     if (!open) return;
     const onEsc = (e: KeyboardEvent) => {
@@ -281,9 +301,9 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
               <input
                 inputMode="numeric"
                 value={km}
-                onChange={(e) => setKm(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => setKm(maskKmComma(e.target.value))}
                 className="w-full px-3 py-2"
-                placeholder="Ex.: 80010"
+                placeholder="Ex.: 80010 ou 352,4"
               />
             </div>
 
@@ -381,7 +401,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         </div>
       </div>
 
-      {/* Pergunta se quer adicionar lembrete (apenas após MANUTENCAO) */}
+      {/* Pergunta lembrete (apenas após MANUTENCAO) */}
       <ConfirmDialog
         open={askReminder}
         title="Adicionar lembrete?"
@@ -398,7 +418,6 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         }}
       />
 
-      {/* Modal do lembrete já com alguns dados preenchidos */}
       <ReminderRuleForm
         open={openReminder}
         onClose={() => {
@@ -409,8 +428,8 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         onSubmit={async (payload) => {
           try {
             await reminders.createRule(payload);
-          } catch (e) {
-            // o hook já vai tratar erro no toast da página de lembretes; aqui é fluxo direto
+          } catch {
+            /* silencioso */
           }
         }}
       />

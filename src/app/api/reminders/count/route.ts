@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   const count = await prisma.reminderRule.count({
     where: {
       userId: (session.user as any).id,
-      ...(onlyActive ? { active: true } : {}),
+      ...(onlyActive ? { isActive: true } : {}), // <- campo correto
     },
   });
 

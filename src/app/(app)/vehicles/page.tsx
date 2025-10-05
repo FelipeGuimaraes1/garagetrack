@@ -1,24 +1,12 @@
-"use client";
-
-import { VehicleCreateModal } from "@/components/vehicle/VehicleCreateModal";
 import { VehicleList } from "@/components/vehicle/VehicleList";
-import { useState } from "react";
+import { getSession } from "@/lib/auth/auth";
+import { redirect } from "next/navigation";
 
-export default function VehiclesPage() {
-  const [isOpen, setIsOpen] = useState(false);
+export default async function VehiclesPage() {
+  const session = await getSession();
+  if (!session?.user) {
+    redirect("/signin?callbackUrl=/vehicles");
+  }
 
-  return (
-    <section className="space-y-4">
-      <div className="panel p-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Veículos</h1>
-        <button onClick={() => setIsOpen(true)} className="button-primary">
-          Novo veículo
-        </button>
-      </div>
-
-      <VehicleList />
-
-      <VehicleCreateModal open={isOpen} onClose={() => setIsOpen(false)} />
-    </section>
-  );
+  return <VehicleList />;
 }

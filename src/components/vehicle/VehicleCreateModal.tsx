@@ -1,16 +1,19 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
 import { emitAppEvent } from "@/lib/utils/events";
 import { maskOdometer, maskPlate } from "@/lib/utils/mask-br";
-import { useEffect, useRef, useState } from "react";
 
 type Props = { open: boolean; onClose: () => void };
 const fuelOptions = ["GASOLINA", "ETANOL", "DIESEL", "GNV", "FLEX"] as const;
 
 export function VehicleCreateModal({ open, onClose }: Props) {
+  const router = useRouter();
   const { createVehicle, reload } = useVehicles();
   const { showToast } = useToast();
 
@@ -18,24 +21,23 @@ export function VehicleCreateModal({ open, onClose }: Props) {
   const [plate, setPlate] = useState("");
   const [fuelDefault, setFuelDefault] = useState<string>("");
   const [odometerKm, setOdometerKm] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // A11y
   const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(
-    panelRef as unknown as React.RefObject<HTMLElement | null>,
-    open
-  );
+  useFocusTrap(panelRef, open);
   useEffect(() => {
     if (!open) return;
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
+    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
   }, [open, onClose]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+
     try {
       await createVehicle({
         nickname: nickname || null,
@@ -43,16 +45,26 @@ export function VehicleCreateModal({ open, onClose }: Props) {
         fuelDefault: (fuelDefault || null) as any,
         odometerKm: odometerKm ? Number(odometerKm) : null,
       });
+
+      // Dispara eventos locais que você já usa
       emitAppEvent("gt:vehicles:changed");
-      await reload();
+      await reload().catch(() => {});
+
+      // Força o server component a refazer a busca no banco
+      router.refresh();
+
       showToast("Veículo criado com sucesso!", "success");
-      onClose();
+
+      // Limpa formulário e fecha
       setNickname("");
       setPlate("");
       setFuelDefault("");
       setOdometerKm("");
+      onClose();
     } catch (err: any) {
-      showToast(err.message || "Erro ao criar veículo.", "error");
+      showToast(err?.message || "Erro ao criar veículo.", "error");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -92,7 +104,7 @@ export function VehicleCreateModal({ open, onClose }: Props) {
             <input
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              className="w-full px-3 py-2"
+              className="w-full px-3 py-2 rounded-md bg-transparent border border-[var(--border)] outline-none focus:ring-1 focus:ring-white/10"
               placeholder="Ex.: Gol 1.6"
             />
           </div>
@@ -102,7 +114,7 @@ export function VehicleCreateModal({ open, onClose }: Props) {
             <input
               value={plate}
               onChange={(e) => setPlate(maskPlate(e.target.value))}
-              className="w-full px-3 py-2"
+              className="w-full px-3 py-2 rounded-md bg-transparent border border-[var(--border)] outline-none focus:ring-1 focus:ring-white/10"
               placeholder="Ex.: ABC1D23"
               maxLength={8}
             />
@@ -113,7 +125,7 @@ export function VehicleCreateModal({ open, onClose }: Props) {
             <select
               value={fuelDefault}
               onChange={(e) => setFuelDefault(e.target.value)}
-              className="w-full px-3 py-2"
+              className="w-full px-3 py-2 rounded-md bg-transparent border border-[var(--border)] outline-none focus:ring-1 focus:ring-white/10"
             >
               <option value="">Selecione</option>
               {fuelOptions.map((opt) => (
@@ -130,7 +142,7 @@ export function VehicleCreateModal({ open, onClose }: Props) {
               value={odometerKm}
               onChange={(e) => setOdometerKm(maskOdometer(e.target.value))}
               inputMode="numeric"
-              className="w-full px-3 py-2"
+              className="w-full px-3 py-2 rounded-md bg-transparent border border-[var(--border)] outline-none focus:ring-1 focus:ring-white/10"
               placeholder="Ex.: 78500"
             />
           </div>
@@ -140,11 +152,16 @@ export function VehicleCreateModal({ open, onClose }: Props) {
               type="button"
               onClick={onClose}
               className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
+              disabled={submitting}
             >
               Cancelar
             </button>
-            <button type="submit" className="button-primary">
-              Salvar
+            <button
+              type="submit"
+              disabled={submitting}
+              className="button-primary disabled:opacity-50"
+            >
+              {submitting ? "Salvando..." : "Salvar"}
             </button>
           </div>
         </form>

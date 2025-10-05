@@ -48,22 +48,22 @@ enum VehicleFuel {
 
 /// Usuário da aplicação (dono de veículos, despesas e sessões de login)
 model User {
-  id           String    @id @default(uuid())     // identificador único (UUID v4)
-  email        String    @unique                  // e-mail único para login
-  name         String?                          // nome de exibição (opcional)
-  image        String?                          // URL do avatar (opcional)
-  passwordHash String?                          // hash de senha (se usar Credentials)
-  createdAt    DateTime  @default(now())         // data/hora de criação
-  updatedAt    DateTime  @updatedAt              // atualiza automaticamente a cada update
-  emailVerified DateTime?                       // requerido pelo PrismaAdapter (NextAuth)
+  id            String    @id @default(uuid())     // identificador único (UUID v4)
+  email         String    @unique                  // e-mail único para login
+  name          String?                            // nome de exibição (opcional)
+  image         String?                            // URL do avatar (opcional)
+  passwordHash  String?                            // hash de senha (se usar Credentials)
+  createdAt     DateTime  @default(now())          // data/hora de criação
+  updatedAt     DateTime  @updatedAt               // atualiza automaticamente a cada update
+  emailVerified DateTime?                          // requerido pelo PrismaAdapter (NextAuth)
 
   // Relacionamentos de domínio
-  vehicles     Vehicle[]                         // 1:N -> veículos do usuário
-  expenses     Expense[]                         // 1:N -> despesas do usuário
+  vehicles      Vehicle[]                          // 1:N -> veículos do usuário
+  expenses      Expense[]                          // 1:N -> despesas do usuário
 
   // Tabelas do Auth.js / NextAuth (para logins e sessões)
-  accounts     Account[]                         // contas externas (Google, etc.)
-  sessions     Session[]                         // sessões (se usar strategy database)
+  accounts      Account[]                          // contas externas (Google, etc.)
+  sessions      Session[]                          // sessões (se usar strategy database)
 
   // ✅ back-relation: lembretes pertencentes ao usuário
   reminderRules ReminderRule[]
@@ -72,110 +72,112 @@ model User {
 /// Conta conectada de provedor (OAuth etc.) — compatível com Auth.js
 model Account {
   id                String  @id @default(cuid())  // id interno da conta
-  userId            String                         // FK para User.id (dono)
-  type              String                         // "oauth" | "oidc" | "email" | ...
-  provider          String                         // ex.: "google", "github"
-  providerAccountId String                         // id do usuário no provedor
+  userId            String                       // FK para User.id (dono)
+  type              String                       // "oauth" | "oidc" | "email" | ...
+  provider          String                       // ex.: "google", "github"
+  providerAccountId String                       // id do usuário no provedor
 
   // Tokens (muitos podem ser grandes, por isso TEXT)
-  refresh_token     String? @db.Text              // refresh token
-  access_token      String? @db.Text              // access token
-  expires_at        Int?                          // unix epoch (segundos) de expiração
-  token_type        String?                       // ex.: "bearer"
-  scope             String?                       // escopos concedidos
-  id_token          String? @db.Text              // id_token (OIDC)
-  session_state     String?                       // estado de sessão do provedor
+  refresh_token     String? @db.Text             // refresh token
+  access_token      String? @db.Text             // access token
+  expires_at        Int?                         // unix epoch (segundos) de expiração
+  token_type        String?                      // ex.: "bearer"
+  scope             String?                      // escopos concedidos
+  id_token          String? @db.Text             // id_token (OIDC)
+  session_state     String?                      // estado de sessão do provedor
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([provider, providerAccountId])         // evita duplicidades por provedor
+  @@unique([provider, providerAccountId])        // evita duplicidades por provedor
 }
 
 /// Sessão persistida (Auth.js com session.strategy = "database")
 model Session {
-  id           String   @id @default(cuid())      // id interno da sessão
-  sessionToken String   @unique                   // token salvo no cookie
-  userId       String                              // FK para User.id
-  expires      DateTime                           // quando expira a sessão
+  id           String   @id @default(cuid())     // id interno da sessão
+  sessionToken String   @unique                  // token salvo no cookie
+  userId       String                            // FK para User.id
+  expires      DateTime                          // quando expira a sessão
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 /// Token de verificação (e-mail magic link, reset de senha, etc.)
 model VerificationToken {
-  identifier String                                // alvo da verificação (e-mail)
-  token      String   @unique                      // token único enviado
-  expires    DateTime                              // validade do token
+  identifier String                               // alvo da verificação (e-mail)
+  token      String   @unique                     // token único enviado
+  expires    DateTime                             // validade do token
 
-  @@unique([identifier, token])                    // garante unicidade do par
+  @@unique([identifier, token])                   // garante unicidade do par
 }
 
 /// Veículo do usuário
 model Vehicle {
-  id          String      @id @default(uuid())     // identificador único
-  userId      String                                  // FK -> User.id (dono)
-  nickname    String?                                 // apelido (ex.: "Golzinho")
-  plate       String?     @db.Citext                 // placa em CITEXT (case-insensitive)
-  odometerKm  Int?                                     // hodômetro atual (km)
-  fuelDefault VehicleFuel?                            // combustível padrão (ex.: FLEX)
-  createdAt   DateTime    @default(now())            // criado em
-  updatedAt   DateTime    @updatedAt                 // atualizado em
+  id          String      @id @default(uuid())    // identificador único
+  userId      String                               // FK -> User.id (dono)
+  nickname    String?                              // apelido (ex.: "Golzinho")
+  plate       String?     @db.Citext              // placa em CITEXT (case-insensitive)
+  odometerKm  Int?                                // hodômetro atual (km)
+  fuelDefault VehicleFuel?                        // combustível padrão (ex.: FLEX)
+  createdAt   DateTime    @default(now())         // criado em
+  updatedAt   DateTime    @updatedAt              // atualizado em
 
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expenses    Expense[]                               // despesas vinculadas ao veículo
+  expenses    Expense[]                           // despesas vinculadas ao veículo
 
   // ✅ back-relation: lembretes associados a este veículo
   reminderRules ReminderRule[]
 
-  @@index([userId])                                   // acelera consultas por dono
-  @@unique([userId, plate])                           // placa única por usuário
+  @@index([userId])                               // acelera consultas por dono
+  @@unique([userId, plate])                       // placa única por usuário
 }
 
 /// Despesa (genérica; especializamos abastecimento com campos opcionais)
 model Expense {
-  id            String         @id @default(uuid())   // identificador único
-  userId        String                                   // FK -> User.id (dono)
-  vehicleId     String                                   // FK -> Vehicle.id (associação)
-  type          ExpenseType                               // tipo da despesa
-  status        ExpenseStatus  @default(PENDENTE)        // situação do pagamento
+  id            String         @id @default(uuid())    // identificador único
+  userId        String                                  // FK -> User.id (dono)
+  vehicleId     String                                  // FK -> Vehicle.id (associação)
+  type          ExpenseType                              // tipo da despesa
+  status        ExpenseStatus  @default(PENDENTE)       // situação do pagamento
 
-  date          DateTime       @db.Date                  // data (sem horário) da despesa
+  date          DateTime       @db.Date                 // data (sem horário) da despesa
 
   // Valores (usamos Decimal para evitar erros de ponto flutuante)
-  amount        Decimal        @db.Decimal(12, 2)        // valor total (R$)
-  description   String                                    // descrição livre
-  km            Int?                                       // km do hodômetro no momento da despesa
+  amount        Decimal        @db.Decimal(12, 2)       // valor total (R$)
+  description   String                                 // descrição livre
+
+  /// ✅ agora aceita casas decimais para km
+  km            Decimal?       @db.Decimal(10, 2)       // km do hodômetro no momento da despesa
 
   // Campos específicos de abastecimento (preenchidos apenas quando type = ABASTECIMENTO)
-  fuelLiters    Decimal?       @db.Decimal(8, 2)         // litros abastecidos (2 casas)
-  pricePerLiter Decimal?       @db.Decimal(10, 2)        // preço por litro (2 casas)
-  fuelType      FuelType?                                 // tipo de combustível abastecido
-  station       String?                                    // posto onde abasteceu
+  fuelLiters    Decimal?       @db.Decimal(8, 2)        // litros abastecidos (2 casas)
+  pricePerLiter Decimal?       @db.Decimal(10, 2)       // preço por litro (2 casas)
+  fuelType      FuelType?                                // tipo de combustível abastecido
+  station       String?                                   // posto onde abasteceu
 
-  createdAt     DateTime       @default(now())            // criado em
-  updatedAt     DateTime       @updatedAt                 // atualizado em
+  createdAt     DateTime       @default(now())           // criado em
+  updatedAt     DateTime       @updatedAt                // atualizado em
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   vehicle       Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  attachments   ExpenseAttachment[]                       // anexos (nota fiscal, foto do serviço)
+  attachments   ExpenseAttachment[]                      // anexos (nota fiscal, foto do serviço)
 
-  @@index([userId, date])                                 // filtros por usuário e período
-  @@index([vehicleId, date])                              // filtros por veículo e período
-  @@index([type])                                         // filtros por categoria
+  @@index([userId, date])                                // filtros por usuário e período
+  @@index([vehicleId, date])                             // filtros por veículo e período
+  @@index([type])                                        // filtros por categoria
 }
 
 /// Anexos de uma despesa (armazenaremos a URL do Cloudinary)
 model ExpenseAttachment {
-  id          String   @id @default(uuid())        // identificador único
-  expenseId   String                                 // FK -> Expense.id
-  url         String   @db.Text                      // URL absoluta (Cloudinary)
-  contentType String?                                // MIME (ex.: image/jpeg, application/pdf)
-  size        Int?                                   // tamanho em bytes (opcional)
-  createdAt   DateTime @default(now())               // criado em
+  id          String   @id @default(uuid())       // identificador único
+  expenseId   String                              // FK -> Expense.id
+  url         String   @db.Text                   // URL absoluta (Cloudinary)
+  contentType String?                             // MIME (ex.: image/jpeg, application/pdf)
+  size        Int?                                // tamanho em bytes (opcional)
+  createdAt   DateTime @default(now())            // criado em
 
   expense     Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
 
-  @@index([expenseId])                               // consultas por despesa
+  @@index([expenseId])                            // consultas por despesa
 }
 
 // --- LEMBRETES (regras que disparam avisos) ---
@@ -188,27 +190,27 @@ enum ReminderType {
 }
 
 model ReminderRule {
-  id           String       @id @default(uuid())        // id único
-  userId       String                                   // FK dono
-  vehicleId    String?                                  // opcional (pode ser geral)
-  type         ReminderType                             // tipo de lembrete
-  title        String                                   // ex.: "Troca de óleo", "IPVA 2026"
-  notes        String?                                  // observações
+  id           String       @id @default(uuid())       // id único
+  userId       String                                  // FK dono
+  vehicleId    String?                                 // opcional (pode ser geral)
+  type         ReminderType                            // tipo de lembrete
+  title        String                                  // ex.: "Troca de óleo", "IPVA 2026"
+  notes        String?                                 // observações
 
   // Periodicidade por km e/ou por tempo
-  everyKm      Int?                                     // ex.: 10000 km
-  everyDays    Int?                                     // ex.: 180 dias
+  everyKm      Int?                                    // ex.: 10000 km
+  everyDays    Int?                                    // ex.: 180 dias
 
   // Referência da última execução
-  lastDoneKm   Int?                                     // odômetro quando fez por último
-  lastDoneAt   DateTime?                                // data quando fez por último
+  lastDoneKm   Int?                                    // odômetro quando fez por último
+  lastDoneAt   DateTime?                               // data quando fez por último
 
   // Data fixa (documentos/multas)
-  dueDate      DateTime?                                // vencimento
+  dueDate      DateTime?                               // vencimento
 
   // Janela de aviso ("faltando tanto")
-  warnKmLeft   Int?          @default(500)              // avisa quando faltar <= X km
-  warnDaysLeft Int?          @default(15)               // avisa quando faltar <= X dias
+  warnKmLeft   Int?          @default(500)             // avisa quando faltar <= X km
+  warnDaysLeft Int?          @default(15)              // avisa quando faltar <= X dias
 
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())

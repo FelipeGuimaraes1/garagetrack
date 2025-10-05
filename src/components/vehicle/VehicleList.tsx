@@ -4,17 +4,20 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
 import { emitAppEvent, onAppEvent } from "@/lib/utils/events";
-import { formatDateISO } from "@/lib/utils/formatters";
-import { Edit2, Trash2 } from "lucide-react";
+import { formatDateBR } from "@/lib/utils/formatters";
+import { Edit2, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { VehicleCreateModal } from "./VehicleCreateModal";
 import { VehicleEditModal } from "./VehicleEditModal";
 
 export function VehicleList() {
   const { vehicles, isLoading, errorMessage, deleteVehicle, reload } =
     useVehicles();
   const { showToast } = useToast();
+
   const [editingId, setEditingId] = useState<String | null>(null);
   const [removingId, setRemovingId] = useState<String | null>(null);
+  const [openCreate, setOpenCreate] = useState(false);
 
   useEffect(() => {
     const off = onAppEvent("gt:vehicles:changed", () => {
@@ -23,69 +26,84 @@ export function VehicleList() {
     return off;
   }, [reload]);
 
-  if (isLoading) {
-    return <div className="surface p-4">Carregando veículos...</div>;
-  }
-
-  if (errorMessage) {
-    return (
-      <div className="surface p-4 text-[var(--danger)]">{errorMessage}</div>
-    );
-  }
-
-  if (!vehicles.length) {
-    return (
-      <div className="surface p-6 text-center">
-        <p className="text-[var(--muted)]">
-          Você ainda não cadastrou veículos.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <>
-      <ul className="grid gap-3">
-        {vehicles.map((v) => (
-          <li key={v.id} className="surface p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="text-base font-medium">
-                  {v.nickname || "Sem apelido"}
-                  {v.plate ? (
-                    <span className="ml-2 text-sm text-[var(--muted)]">
-                      ({v.plate})
-                    </span>
-                  ) : null}
+      {/* Header com botão "Novo veículo" */}
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Veículos</h1>
+
+        <button
+          onClick={() => setOpenCreate(true)}
+          className="button-primary inline-flex items-center gap-2"
+        >
+          <Plus size={16} />
+          Novo veículo
+        </button>
+      </div>
+
+      {/* States de lista */}
+      {isLoading ? (
+        <div className="surface p-4">Carregando veículos...</div>
+      ) : errorMessage ? (
+        <div className="surface p-4 text-[var(--danger)]">{errorMessage}</div>
+      ) : !vehicles.length ? (
+        <div className="surface p-6 text-center">
+          <p className="text-[var(--muted)]">
+            Você ainda não cadastrou veículos.
+          </p>
+        </div>
+      ) : (
+        <ul className="grid gap-3">
+          {vehicles.map((v) => (
+            <li key={v.id} className="surface p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="text-base font-medium">
+                    {v.nickname || "Sem apelido"}
+                    {v.plate ? (
+                      <span className="ml-2 text-sm text-[var(--muted)]">
+                        ({v.plate})
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="text-sm text-[var(--muted)]">
+                    {v.fuelDefault ? `Combustível: ${v.fuelDefault} · ` : ""}
+                    {v.odometerKm != null
+                      ? `Hodômetro: ${v.odometerKm} km · `
+                      : ""}
+                    Criado: {formatDateBR(v.createdAt)}
+                  </div>
                 </div>
-                <div className="text-sm text-[var(--muted)]">
-                  {v.fuelDefault ? `Combustível: ${v.fuelDefault} · ` : ""}
-                  {v.odometerKm != null
-                    ? `Hodômetro: ${v.odometerKm} km · `
-                    : ""}
-                  Criado: {formatDateISO(new Date(v.createdAt))}
+
+                <div className="shrink-0 flex gap-2">
+                  <button
+                    onClick={() => setEditingId(v.id)}
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
+                    aria-label="Editar veículo"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button
+                    onClick={() => setRemovingId(v.id)}
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
+                    aria-label="Remover veículo"
+                  >
+                    <Trash2 size={16} className="text-[var(--danger)]" />
+                  </button>
                 </div>
               </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
-              <div className="shrink-0 flex gap-2">
-                <button
-                  onClick={() => setEditingId(v.id)}
-                  className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
-                >
-                  <Edit2 size={16} />
-                </button>
-                <button
-                  onClick={() => setRemovingId(v.id)}
-                  className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
-                >
-                  <Trash2 size={16} className="text-[var(--danger)]" />
-                </button>
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {/* Modal: criar */}
+      <VehicleCreateModal
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+      />
 
+      {/* Modal: editar */}
       <VehicleEditModal
         vehicleId={(editingId as string) ?? null}
         open={Boolean(editingId)}
@@ -95,6 +113,7 @@ export function VehicleList() {
         }}
       />
 
+      {/* Diálogo: remover */}
       <ConfirmDialog
         open={Boolean(removingId)}
         title="Remover veículo"

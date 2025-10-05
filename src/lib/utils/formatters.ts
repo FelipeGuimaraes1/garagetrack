@@ -27,12 +27,24 @@ export function formatDateISO(date: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/**
+ * Formata uma data (Date ou string compatível com Date)
+ * em DD/MM/AAAA SEM deslocamento de fuso (UTC “fixo”).
+ * Útil para campos DATE do banco (sem hora).
+ */
+export function formatDateBR(dateLike: Date | string): string {
+  const d = typeof dateLike === "string" ? new Date(dateLike) : dateLike;
+  // Força UTC para evitar “andar” um dia para trás em fuso -03:00
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(d);
+}
+
 /** Tenta criar Date a partir de yyyy-mm-dd (ou dd/mm/yyyy) */
 export function parseDate(input: string): Date | null {
   if (!input) return null;
   // yyyy-mm-dd
   if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
     const [y, m, d] = input.split("-").map(Number);
+    // cria no fuso local (útil para inputs <input type="date">)
     return new Date(y, m - 1, d);
   }
   // dd/mm/yyyy

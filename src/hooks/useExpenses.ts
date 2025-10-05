@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useToast } from "./useToast";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export type Expense = {
   id: string;
@@ -15,134 +14,144 @@ export type Expense = {
     | "MULTA"
     | "OUTRO";
   status: "PAGO" | "PENDENTE";
-  date: string; // ISO yyyy-mm-ddT...
+  date: string; // ISO
   amount: number;
   description: string;
   km: number | null;
-  fuelLiters: number | null;
-  pricePerLiter: number | null;
-  fuelType: "GASOLINA" | "ETANOL" | "DIESEL" | "GNV" | null;
-  station: string | null;
+
+  // abastecimento
+  fuelLiters?: number | null;
+  pricePerLiter?: number | null;
+  fuelType?: "GASOLINA" | "ETANOL" | "DIESEL" | "GNV" | null;
+  station?: string | null;
+
+  // join simples opcional
+  vehicle?: {
+    id: string;
+    nickname: string | null;
+    plate: string | null;
+  } | null;
+
+  attachments?: { id: string; url: string }[];
   createdAt: string;
   updatedAt: string;
-  vehicle?: any;
-  attachments?: Array<{
-    id: string;
-    url: string;
-    contentType: string | null;
-    size: number | null;
-  }>;
 };
 
 export type ExpenseFilters = {
-  vehicleId?: string;
-  type?: Expense["type"];
-  dateFrom?: string; // yyyy-mm-dd
-  dateTo?: string; // yyyy-mm-dd
   page?: number;
-  pageSize?: number;
+  // adicione outros filtros se quiser (vehicleId, type, status, range etc.)
 };
 
-export function useExpenses(initialFilters?: ExpenseFilters) {
-  const { showToast } = useToast();
-  const [filters, setFilters] = useState<ExpenseFilters>({
-    page: 1,
-    pageSize: 20,
-    ...initialFilters,
-  });
-  const [data, setData] = useState<Expense[]>([]);
-  const [totalCount, setTotalCount] = useState<number>(0);
-  const [totalPages, setTotalPages] = useState<number>(1);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+type CreateInput = Omit<
+  Expense,
+  "id" | "userId" | "createdAt" | "updatedAt" | "vehicle" | "attachments"
+> & {
+  attachments?: {
+    url: string;
+    contentType?: string | null;
+    size?: number | null;
+  }[];
+};
+
+type UpdateInput = Partial<CreateInput>;
+
+export function useExpenses(initialFilters: ExpenseFilters = { page: 1 }) {
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [totalPages, setTotalPages] = useState(1);
+  const [filters, setFilters] = useState<ExpenseFilters>({
+    page: initialFilters.page ?? 1,
+  });
 
-  function buildQueryString(params: Record<string, unknown>) {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        query.set(key, String(value));
-      }
-    });
-    return query.toString();
-  }
-
-  async function loadExpenses(next?: Partial<ExpenseFilters>) {
-    try {
-      setIsLoading(true);
+  const load = useCallback(
+    async (next?: ExpenseFilters) => {
       const merged = { ...filters, ...(next || {}) };
-      const qs = buildQueryString(merged);
-      const response = await fetch(`/api/expenses?${qs}`, {
-        cache: "no-store",
-        credentials: "include",
-      });
-      const json = await response.json();
-      if (!response.ok)
-        throw new Error(json?.error || "Falha ao carregar despesas.");
-      setData(json.data || []);
-      setTotalCount(json.totalCount || 0);
-      setTotalPages(json.totalPages || 1);
-      setFilters({ ...merged });
+      setFilters(merged);
+      setIsLoading(true);
       setErrorMessage(null);
-    } catch (error: any) {
-      setErrorMessage(error.message);
-      showToast(error.message, "error");
-    } finally {
-      setIsLoading(false);
-    }
-  }
+      try {
+        const qs = new URLSearchParams();
+        if (merged.page) qs.set("page", String(merged.page));
+        const res = await fetch(`/api/expenses?${qs.toString()}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(txt || "Falha ao carregar despesas.");
+        }
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setExpenses(data);
+          setTotalPages(1);
+        } else {
+          setExpenses(Array.isArray(data.items) ? data.items : []);
+          setTotalPages(Number(data.totalPages || 1));
+          if (data.page) setFilters((f) => ({ ...f, page: data.page }));
+        }
+      } catch (e: any) {
+        setErrorMessage(e?.message || "Erro ao buscar despesas.");
+        setExpenses([]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [filters]
+  );
 
   useEffect(() => {
-    void loadExpenses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void load();
+  }, []); // primeira carga
+
+  const createExpense = useCallback(async (input: CreateInput) => {
+    const res = await fetch("/api/expenses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(txt || "Erro ao criar despesa.");
+    }
+    const created: Expense = await res.json();
+    // otimista: injeta no topo
+    setExpenses((prev) => [created, ...prev]);
+    return created;
   }, []);
 
-  async function createExpense(
-    payload: Omit<Expense, "id" | "createdAt" | "updatedAt" | "userId">
-  ) {
-    const response = await fetch("/api/expenses", {
-      method: "POST",
-      body: JSON.stringify(payload),
-      headers: { "Content-Type": "application/json" },
-    });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json?.error || "Falha ao criar despesa.");
-    await loadExpenses();
-    return json.data as Expense;
-  }
-
-  async function updateExpense(id: string, payload: Partial<Expense>) {
-    const response = await fetch(`/api/expenses/${id}`, {
+  const updateExpense = useCallback(async (id: string, input: UpdateInput) => {
+    const res = await fetch(`/api/expenses/${id}`, {
       method: "PATCH",
-      body: JSON.stringify(payload),
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
     });
-    const json = await response.json();
-    if (!response.ok)
-      throw new Error(json?.error || "Falha ao atualizar despesa.");
-    await loadExpenses();
-    return json.data as Expense;
-  }
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(txt || "Erro ao atualizar despesa.");
+    }
+    const updated: Expense = await res.json();
+    setExpenses((prev) => prev.map((e) => (e.id === id ? updated : e)));
+    return updated;
+  }, []);
 
-  async function deleteExpense(id: string) {
-    const response = await fetch(`/api/expenses/${id}`, { method: "DELETE" });
-    const json = await response.json();
-    if (!response.ok)
-      throw new Error(json?.error || "Falha ao remover despesa.");
-    await loadExpenses();
-    return true;
-  }
+  const deleteExpense = useCallback(async (id: string) => {
+    const res = await fetch(`/api/expenses/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(txt || "Erro ao excluir despesa.");
+    }
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+  }, []);
 
-  return {
-    expenses: data,
-    isLoading,
-    errorMessage,
-    totalCount,
-    totalPages,
-    filters,
-    setFilters,
-    reload: loadExpenses,
-    createExpense,
-    updateExpense,
-    deleteExpense,
-  };
+  const helpers = useMemo(
+    () => ({
+      reload: (next?: ExpenseFilters) => load(next),
+      createExpense,
+      updateExpense,
+      deleteExpense,
+    }),
+    [load, createExpense, updateExpense, deleteExpense]
+  );
+
+  return { expenses, isLoading, errorMessage, totalPages, filters, ...helpers };
 }

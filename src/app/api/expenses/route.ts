@@ -20,10 +20,12 @@ export async function GET(req: Request) {
   const where: any = { userId: (session.user as any).id };
   if (vehicleId) where.vehicleId = vehicleId;
   if (type) where.type = type;
+
+  // Filtro mensal sem problemas de fuso
   if (month && /^\d{4}-\d{2}$/.test(month)) {
     const [y, m] = month.split("-").map((n) => parseInt(n, 10));
-    const from = new Date(y, m - 1, 1);
-    const to = new Date(y, m, 1);
+    const from = new Date(Date.UTC(y, m - 1, 1));
+    const to = new Date(Date.UTC(y, m, 1));
     where.date = { gte: from, lt: to };
   }
 
@@ -47,13 +49,19 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
 
+  // body.date deve vir como "YYYY-MM-DD". Convertendo para ISO completo (UTC meia-noite)
+  const dateISO =
+    typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
+      ? new Date(`${body.date}T00:00:00.000Z`)
+      : new Date(body.date); // fallback, caso já venha completo
+
   const created = await prisma.expense.create({
     data: {
       userId: (session.user as any).id,
       vehicleId: body.vehicleId,
       type: body.type,
       status: body.status,
-      date: new Date(body.date),
+      date: dateISO, // <- agora é um Date válido em ISO
       amount: body.amount,
       description: body.description,
       km: body.km ?? null,
