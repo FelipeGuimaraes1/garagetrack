@@ -15,11 +15,13 @@ export function VehicleList() {
     useVehicles();
   const { showToast } = useToast();
 
-  const [editingId, setEditingId] = useState<String | null>(null);
-  const [removingId, setRemovingId] = useState<String | null>(null);
+  // Use sempre "string" (minúsculo). "String" cria um wrapper object e pode causar bugs sutis.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [openCreate, setOpenCreate] = useState(false);
 
   useEffect(() => {
+    // Recarrega quando alguém emitir o evento "gt:vehicles:changed"
     const off = onAppEvent("gt:vehicles:changed", () => {
       void reload();
     });
@@ -28,7 +30,7 @@ export function VehicleList() {
 
   return (
     <>
-      {/* Header com botão "Novo veículo" */}
+      {/* Cabeçalho com botão "Novo veículo" */}
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Veículos</h1>
 
@@ -41,7 +43,7 @@ export function VehicleList() {
         </button>
       </div>
 
-      {/* States de lista */}
+      {/* Estados da lista */}
       {isLoading ? (
         <div className="surface p-4">Carregando veículos...</div>
       ) : errorMessage ? (
@@ -54,37 +56,39 @@ export function VehicleList() {
         </div>
       ) : (
         <ul className="grid gap-3">
-          {vehicles.map((v) => (
-            <li key={v.id} className="surface p-4">
+          {vehicles.map((vehicle) => (
+            <li key={vehicle.id} className="surface p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="text-base font-medium">
-                    {v.nickname || "Sem apelido"}
-                    {v.plate ? (
+                    {vehicle.nickname || "Sem apelido"}
+                    {vehicle.plate ? (
                       <span className="ml-2 text-sm text-[var(--muted)]">
-                        ({v.plate})
+                        ({vehicle.plate})
                       </span>
                     ) : null}
                   </div>
                   <div className="text-sm text-[var(--muted)]">
-                    {v.fuelDefault ? `Combustível: ${v.fuelDefault} · ` : ""}
-                    {v.odometerKm != null
-                      ? `Hodômetro: ${v.odometerKm} km · `
+                    {vehicle.fuelDefault
+                      ? `Combustível: ${vehicle.fuelDefault} · `
                       : ""}
-                    Criado: {formatDateBR(v.createdAt)}
+                    {vehicle.odometerKm != null
+                      ? `Hodômetro: ${vehicle.odometerKm} km · `
+                      : ""}
+                    Criado: {formatDateBR(vehicle.createdAt)}
                   </div>
                 </div>
 
                 <div className="shrink-0 flex gap-2">
                   <button
-                    onClick={() => setEditingId(v.id)}
+                    onClick={() => setEditingId(vehicle.id)}
                     className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
                     aria-label="Editar veículo"
                   >
                     <Edit2 size={16} />
                   </button>
                   <button
-                    onClick={() => setRemovingId(v.id)}
+                    onClick={() => setRemovingId(vehicle.id)}
                     className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
                     aria-label="Remover veículo"
                   >
@@ -105,7 +109,7 @@ export function VehicleList() {
 
       {/* Modal: editar */}
       <VehicleEditModal
-        vehicleId={(editingId as string) ?? null}
+        vehicleId={editingId}
         open={Boolean(editingId)}
         onClose={() => setEditingId(null)}
         onSaved={async () => {
@@ -123,11 +127,12 @@ export function VehicleList() {
         onConfirm={async () => {
           if (!removingId) return;
           try {
-            await deleteVehicle(removingId as string);
+            await deleteVehicle(removingId);
             emitAppEvent("gt:vehicles:changed");
             showToast("Veículo removido!", "success");
-          } catch (e: any) {
-            showToast(e.message || "Falha ao remover veículo.", "error");
+            await reload();
+          } catch (error: any) {
+            showToast(error?.message || "Falha ao remover veículo.", "error");
           } finally {
             setRemovingId(null);
           }

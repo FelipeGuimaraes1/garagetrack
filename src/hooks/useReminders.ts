@@ -28,8 +28,20 @@ type RemindersHook = {
     currentOdometer?: number,
     doneAt?: string
   ) => Promise<void>;
-  snoozeRule: (id: string, days: number) => Promise<void>; // <-- tipagem firme
+  snoozeRule: (id: string, days: number) => Promise<void>;
 };
+
+/** Normaliza resposta da API para array de lembretes. */
+function normalizeReminders(payload: unknown): ReminderComputed[] {
+  if (Array.isArray(payload)) return payload as ReminderComputed[];
+  if (payload && Array.isArray((payload as any).items))
+    return (payload as any).items as ReminderComputed[];
+  if (payload && Array.isArray((payload as any).data))
+    return (payload as any).data as ReminderComputed[];
+  if (payload && Array.isArray((payload as any).results))
+    return (payload as any).results as ReminderComputed[];
+  return [];
+}
 
 export function useReminders(initialFilters?: Filters): RemindersHook {
   const [reminders, setReminders] = useState<ReminderComputed[]>([]);
@@ -38,24 +50,30 @@ export function useReminders(initialFilters?: Filters): RemindersHook {
   const [filters, setFilters] = useState<Filters>(initialFilters ?? {});
 
   const reload = useCallback(
-    async (f?: Partial<Filters>) => {
+    async (partial?: Partial<Filters>) => {
       try {
         setIsLoading(true);
-        const next = { ...filters, ...(f ?? {}) };
-        const qs = new URLSearchParams();
-        if (next.vehicleId) qs.set("vehicleId", next.vehicleId);
-        if (next.onlyActive) qs.set("onlyActive", "1");
-        const res = await fetch(`/api/reminders?${qs.toString()}`, {
-          cache: "no-store",
-          credentials: "include",
-        });
-        if (!res.ok) throw new Error("Erro ao carregar lembretes.");
-        const data: ReminderComputed[] = await res.json();
-        setReminders(data);
+        const next = { ...filters, ...(partial ?? {}) };
+        const queryString = new URLSearchParams();
+        if (next.vehicleId) queryString.set("vehicleId", next.vehicleId);
+        if (next.onlyActive) queryString.set("onlyActive", "1");
+
+        const response = await fetch(
+          `/api/reminders?${queryString.toString()}`,
+          {
+            cache: "no-store",
+            credentials: "include",
+          }
+        );
+        if (!response.ok) throw new Error("Erro ao carregar lembretes.");
+
+        const json = await response.json();
+        setReminders(normalizeReminders(json));
         setFilters(next);
         setErrorMessage(null);
-      } catch (e: any) {
-        setErrorMessage(e.message || "Falha ao carregar.");
+      } catch (error: any) {
+        setErrorMessage(error?.message || "Falha ao carregar.");
+        setReminders([]);
       } finally {
         setIsLoading(false);
       }
@@ -68,26 +86,33 @@ export function useReminders(initialFilters?: Filters): RemindersHook {
   }, []); // primeira carga
 
   async function createRule(payload: any) {
-    const res = await fetch("/api/reminders", {
+    const response = await fetch("/api/reminders", {
       method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Falha ao criar lembrete.");
+    if (!response.ok) throw new Error("Falha ao criar lembrete.");
     await reload();
   }
 
   async function updateRule(id: string, payload: any) {
-    const res = await fetch(`/api/reminders/${id}`, {
+    const response = await fetch(`/api/reminders/${id}`, {
       method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Falha ao atualizar lembrete.");
+    if (!response.ok) throw new Error("Falha ao atualizar lembrete.");
     await reload();
   }
 
   async function deleteRule(id: string) {
-    const res = await fetch(`/api/reminders/${id}`, { method: "DELETE" });
-    if (!res.ok) throw new Error("Falha ao remover lembrete.");
+    const response = await fetch(`/api/reminders/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!response.ok) throw new Error("Falha ao remover lembrete.");
     await reload();
   }
 
@@ -96,8 +121,10 @@ export function useReminders(initialFilters?: Filters): RemindersHook {
     currentOdometer?: number,
     doneAt?: string
   ) {
-    const res = await fetch(`/api/reminders/${id}`, {
+    const response = await fetch(`/api/reminders/${id}`, {
       method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "markDone",
         currentOdometer:
@@ -107,18 +134,20 @@ export function useReminders(initialFilters?: Filters): RemindersHook {
         doneAt,
       }),
     });
-    if (!res.ok) throw new Error("Falha ao marcar como feito.");
+    if (!response.ok) throw new Error("Falha ao marcar como feito.");
     await reload();
   }
 
   async function snoozeRule(id: string, days: number) {
-    const res = await fetch(`/api/reminders/${id}`, {
+    const response = await fetch(`/api/reminders/${id}`, {
       method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "snooze", days }),
     });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      throw new Error(j?.error || "Falha ao adiar lembrete.");
+    if (!response.ok) {
+      const json = await response.json().catch(() => ({}));
+      throw new Error((json as any)?.error || "Falha ao adiar lembrete.");
     }
     await reload();
   }
@@ -148,14 +177,17 @@ export function useReminderCount(opts?: {
   const reload = useCallback(async () => {
     try {
       setLoading(true);
-      const qs = new URLSearchParams();
-      if (opts?.vehicleId) qs.set("vehicleId", opts.vehicleId);
-      if (opts?.onlyActive ?? true) qs.set("onlyActive", "1");
-      const res = await fetch(`/api/reminders/count?${qs.toString()}`, {
-        cache: "no-store",
-        credentials: "include",
-      });
-      const json = await res.json();
+      const queryString = new URLSearchParams();
+      if (opts?.vehicleId) queryString.set("vehicleId", opts.vehicleId);
+      if (opts?.onlyActive ?? true) queryString.set("onlyActive", "1");
+      const response = await fetch(
+        `/api/reminders/count?${queryString.toString()}`,
+        {
+          cache: "no-store",
+          credentials: "include",
+        }
+      );
+      const json = await response.json();
       setCount(json.count ?? 0);
     } finally {
       setLoading(false);

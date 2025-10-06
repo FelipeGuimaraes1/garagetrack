@@ -1,81 +1,135 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/utils/db";
+import { buildValidationError } from "@/lib/validations/errors";
+import { ReminderUpdateSchema } from "@/lib/validations/reminder";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
-/** Parse seguro de datas (yyyy-mm-dd ou ISO) */
-function parseDateSafe(input: any): Date | undefined {
-  if (typeof input !== "string") return undefined;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
-    return new Date(`${input}T00:00:00.000Z`);
-  }
-  const d = new Date(input);
-  return Number.isNaN(d.getTime()) ? undefined : d;
+function parseDateOnlyToUTC(dateISO: string): Date {
+  const [y, m, d] = dateISO.split("-").map((v) => Number(v));
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
-/** Atualiza uma regra de lembrete do usuário autenticado */
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+type RouteParams = { params: { id: string } };
 
-  const id = params.id;
-  const userId = (session.user as any).id;
-  const body = await req.json().catch(() => ({}));
+export async function PATCH(request: Request, context: RouteParams) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
 
-  // Garante propriedade
-  const owned = await prisma.reminderRule.findUnique({
-    where: { id },
-    select: { userId: true },
-  });
-  if (!owned || owned.userId !== userId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const reminderId = context.params.id;
+    const existing = await prisma.reminderRule.findFirst({
+      where: { id: reminderId, userId: session.user.id },
+    });
+    if (!existing) {
+      return NextResponse.json(
+        { message: "Lembrete não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    const requestBody = await request.json();
+    const validationResult = ReminderUpdateSchema.safeParse({
+      ...requestBody,
+      id: reminderId,
+    });
+    if (!validationResult.success) {
+      return NextResponse.json(
+        buildValidationError(
+          "Erro de validação ao atualizar lembrete.",
+          validationResult.error.issues
+        ),
+        { status: 422 }
+      );
+    }
+
+    const dataToUpdate = { ...validationResult.data } as any;
+    delete dataToUpdate.id;
+
+    const prismaData: any = {};
+
+    if (typeof dataToUpdate.vehicleId !== "undefined")
+      prismaData.vehicleId = dataToUpdate.vehicleId;
+    if (typeof dataToUpdate.type !== "undefined")
+      prismaData.type = dataToUpdate.type;
+    if (typeof dataToUpdate.title !== "undefined")
+      prismaData.title = dataToUpdate.title;
+    if (typeof dataToUpdate.notes !== "undefined")
+      prismaData.notes = dataToUpdate.notes ?? null;
+    if (typeof dataToUpdate.everyKm !== "undefined")
+      prismaData.everyKm = dataToUpdate.everyKm ?? null;
+    if (typeof dataToUpdate.everyDays !== "undefined")
+      prismaData.everyDays = dataToUpdate.everyDays ?? null;
+    if (typeof dataToUpdate.lastDoneKm !== "undefined")
+      prismaData.lastDoneKm = dataToUpdate.lastDoneKm ?? null;
+    if (typeof dataToUpdate.lastDoneAtISO !== "undefined")
+      prismaData.lastDoneAt = dataToUpdate.lastDoneAtISO
+        ? parseDateOnlyToUTC(dataToUpdate.lastDoneAtISO)
+        : null;
+    if (typeof dataToUpdate.dueDateISO !== "undefined")
+      prismaData.dueDate = dataToUpdate.dueDateISO
+        ? parseDateOnlyToUTC(dataToUpdate.dueDateISO)
+        : null;
+    if (typeof dataToUpdate.warnKmLeft !== "undefined")
+      prismaData.warnKmLeft = dataToUpdate.warnKmLeft;
+    if (typeof dataToUpdate.warnDaysLeft !== "undefined")
+      prismaData.warnDaysLeft = dataToUpdate.warnDaysLeft;
+    if (typeof dataToUpdate.isActive !== "undefined")
+      prismaData.isActive = dataToUpdate.isActive;
+
+    const updatedReminder = await prisma.reminderRule.update({
+      where: { id: reminderId },
+      data: prismaData,
+    });
+
+    return NextResponse.json({ data: updatedReminder }, { status: 200 });
+  } catch {
+    return NextResponse.json(
+      { message: "Erro ao atualizar lembrete." },
+      { status: 500 }
+    );
   }
-
-  const updated = await prisma.reminderRule.update({
-    where: { id },
-    data: {
-      vehicleId: body.vehicleId ?? undefined,
-      type: body.type ?? undefined,
-      title: body.title ?? undefined,
-      notes: body.notes ?? undefined,
-      everyKm: body.everyKm != null ? Number(body.everyKm) : undefined,
-      everyDays: body.everyDays != null ? Number(body.everyDays) : undefined,
-      lastDoneKm: body.lastDoneKm != null ? Number(body.lastDoneKm) : undefined,
-      lastDoneAt: parseDateSafe(body.lastDoneAt) ?? undefined,
-      dueDate: parseDateSafe(body.dueDate) ?? undefined,
-      isActive:
-        typeof body.isActive === "boolean" ? Boolean(body.isActive) : undefined,
-    },
-  });
-
-  return NextResponse.json(updated);
 }
 
-/** Remove uma regra de lembrete do usuário autenticado */
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function DELETE(_request: Request, context: RouteParams) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
 
-  const id = params.id;
-  const userId = (session.user as any).id;
+    const reminderId = context.params.id;
+    const existing = await prisma.reminderRule.findFirst({
+      where: { id: reminderId, userId: session.user.id },
+    });
+    if (!existing) {
+      return NextResponse.json(
+        { message: "Lembrete não encontrado." },
+        { status: 404 }
+      );
+    }
 
-  // Garante propriedade
-  const owned = await prisma.reminderRule.findUnique({
-    where: { id },
-    select: { userId: true },
-  });
-  if (!owned || owned.userId !== userId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    await prisma.reminderRule.delete({ where: { id: reminderId } });
+
+    return NextResponse.json(
+      { message: "Lembrete excluído com sucesso." },
+      { status: 200 }
+    );
+  } catch {
+    return NextResponse.json(
+      { message: "Erro ao excluir lembrete." },
+      { status: 500 }
+    );
   }
-
-  await prisma.reminderRule.delete({ where: { id } });
-  return new NextResponse(null, { status: 204 });
 }

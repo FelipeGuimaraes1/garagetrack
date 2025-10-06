@@ -9,7 +9,7 @@ export type Vehicle = {
   plate: string | null;
   fuelDefault: "GASOLINA" | "ETANOL" | "DIESEL" | "GNV" | "FLEX" | null;
   odometerKm: number | null;
-  createdAt: string; // vem ISO do API
+  createdAt: string; // ISO vindo da API
   updatedAt: string;
 };
 
@@ -22,6 +22,18 @@ type CreateInput = {
 
 type UpdateInput = Partial<CreateInput>;
 
+/** Normaliza diferentes formatos de resposta para sempre obter um array de veículos. */
+function normalizeVehicleList(payload: unknown): Vehicle[] {
+  if (Array.isArray(payload)) return payload as Vehicle[];
+  if (payload && Array.isArray((payload as any).items))
+    return (payload as any).items as Vehicle[];
+  if (payload && Array.isArray((payload as any).data))
+    return (payload as any).data as Vehicle[];
+  if (payload && Array.isArray((payload as any).results))
+    return (payload as any).results as Vehicle[];
+  return [];
+}
+
 export function useVehicles() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -31,18 +43,19 @@ export function useVehicles() {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const res = await fetch("/api/vehicles", {
+      const response = await fetch("/api/vehicles", {
         method: "GET",
-        cache: "no-store", // <- sem cache
+        cache: "no-store",
+        credentials: "include", // garante envio de cookies/sessão
       });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(txt || "Falha ao carregar veículos.");
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(text || "Falha ao carregar veículos.");
       }
-      const data: Vehicle[] = await res.json();
-      setVehicles(Array.isArray(data) ? data : []);
-    } catch (e: any) {
-      setErrorMessage(e?.message || "Erro ao buscar veículos.");
+      const json = await response.json();
+      setVehicles(normalizeVehicleList(json));
+    } catch (error: any) {
+      setErrorMessage(error?.message || "Erro ao buscar veículos.");
       setVehicles([]);
     } finally {
       setIsLoading(false);
@@ -50,48 +63,61 @@ export function useVehicles() {
   }, []);
 
   useEffect(() => {
-    // carrega ao montar
-    void load();
+    void load(); // primeira carga
   }, [load]);
 
   const createVehicle = useCallback(async (input: CreateInput) => {
-    const res = await fetch("/api/vehicles", {
+    const response = await fetch("/api/vehicles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(input),
     });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(txt || "Erro ao criar veículo.");
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(text || "Erro ao criar veículo.");
     }
-    const created: Vehicle = await res.json();
-    // otimista: já injeta no topo
-    setVehicles((prev) => [created, ...prev]);
+    const created: Vehicle = await response.json();
+    // UI otimista: injeta no topo
+    setVehicles((previous) => [created, ...previous]);
     return created;
   }, []);
 
-  const updateVehicle = useCallback(async (id: string, input: UpdateInput) => {
-    const res = await fetch(`/api/vehicles/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(txt || "Erro ao atualizar veículo.");
-    }
-    const updated: Vehicle = await res.json();
-    setVehicles((prev) => prev.map((v) => (v.id === id ? updated : v)));
-    return updated;
-  }, []);
+  const updateVehicle = useCallback(
+    async (vehicleId: string, input: UpdateInput) => {
+      const response = await fetch(`/api/vehicles/${vehicleId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(text || "Erro ao atualizar veículo.");
+      }
+      const updated: Vehicle = await response.json();
+      setVehicles((previous) =>
+        previous.map((vehicle) =>
+          vehicle.id === vehicleId ? updated : vehicle
+        )
+      );
+      return updated;
+    },
+    []
+  );
 
-  const deleteVehicle = useCallback(async (id: string) => {
-    const res = await fetch(`/api/vehicles/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(txt || "Erro ao excluir veículo.");
+  const deleteVehicle = useCallback(async (vehicleId: string) => {
+    const response = await fetch(`/api/vehicles/${vehicleId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(text || "Erro ao excluir veículo.");
     }
-    setVehicles((prev) => prev.filter((v) => v.id !== id));
+    setVehicles((previous) =>
+      previous.filter((vehicle) => vehicle.id !== vehicleId)
+    );
   }, []);
 
   const helpers = useMemo(

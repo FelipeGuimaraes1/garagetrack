@@ -4,10 +4,23 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useReminders } from "@/hooks/useReminders";
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { MarkDoneDialog } from "./MarkDoneDialog";
 import { ReminderRuleForm } from "./ReminderRuleForm";
 import { SnoozeDialog } from "./SnoozeDialog";
+
+/**
+ * Forma mínima que o item de lembrete precisa ter para renderização.
+ * Isso permite o componente lidar com pequenas variações do hook.
+ */
+type ReminderLike = {
+  id: string;
+  vehicleId: string | null;
+  title: string;
+  type: string;
+  status?: string;
+  message?: string;
+};
 
 export function ReminderList() {
   const {
@@ -31,9 +44,23 @@ export function ReminderList() {
   const [markId, setMarkId] = useState<string | null>(null);
   const [snoozeId, setSnoozeId] = useState<string | null>(null);
 
-  function colorByStatus(s: string) {
-    if (s === "OVERDUE") return "border-[color:var(--danger)]/40";
-    if (s === "DUE_SOON") return "border-[color:var(--warning)]/40";
+  /**
+   * Normaliza o retorno do hook para um array:
+   * - Se já for array, usa diretamente.
+   * - Se vier como objeto paginado, tenta usar a propriedade "data".
+   * - Caso contrário, cai para array vazio para evitar crash.
+   */
+  const remindersList: ReminderLike[] = useMemo(() => {
+    if (Array.isArray(reminders)) return reminders as ReminderLike[];
+    if (reminders && Array.isArray((reminders as any).data)) {
+      return (reminders as any).data as ReminderLike[];
+    }
+    return [];
+  }, [reminders]);
+
+  function colorByStatus(status: string | undefined) {
+    if (status === "OVERDUE") return "border-[color:var(--danger)]/40";
+    if (status === "DUE_SOON") return "border-[color:var(--warning)]/40";
     return "border-[var(--border)]";
   }
 
@@ -57,45 +84,49 @@ export function ReminderList() {
         <div className="surface p-4 text-[var(--danger)]">{errorMessage}</div>
       )}
 
+      {/* Lista segura — sempre mapeia sobre array normalizado */}
       <ul className="grid gap-3">
-        {reminders.map((r) => {
-          const v = vehicles.find((x) => x.id === r.vehicleId);
+        {remindersList.map((reminder) => {
+          const vehicle = vehicles.find(
+            (vehicleItem) => vehicleItem.id === reminder.vehicleId
+          );
           return (
             <li
-              key={r.id}
-              className={`surface p-4 border ${colorByStatus(r.status)}`}
+              key={reminder.id}
+              className={`surface p-4 border ${colorByStatus(reminder.status)}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="font-medium">
-                    {r.title}
-                    {v ? (
+                    {reminder.title}
+                    {vehicle ? (
                       <span className="text-sm text-[var(--muted)] ml-2">
-                        · {v.nickname || v.plate}
+                        · {vehicle.nickname || vehicle.plate}
                       </span>
                     ) : null}
                   </div>
                   <div className="text-sm text-[var(--muted)] mt-1">
-                    {r.type} · {r.message}
+                    {reminder.type}
+                    {reminder.message ? ` · ${reminder.message}` : ""}
                   </div>
                 </div>
                 <div className="shrink-0 flex gap-2">
                   <button
                     className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
-                    onClick={() => setMarkId(r.id)}
+                    onClick={() => setMarkId(reminder.id)}
                   >
                     Feito
                   </button>
                   <button
                     className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
-                    onClick={() => setSnoozeId(r.id)}
+                    onClick={() => setSnoozeId(reminder.id)}
                   >
                     Adiar
                   </button>
                   <button
                     className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
                     onClick={() => {
-                      setEditing(r);
+                      setEditing(reminder);
                       setOpenForm(true);
                     }}
                   >
@@ -103,7 +134,7 @@ export function ReminderList() {
                   </button>
                   <button
                     className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
-                    onClick={() => setRemovingId(r.id)}
+                    onClick={() => setRemovingId(reminder.id)}
                   >
                     Remover
                   </button>
@@ -128,8 +159,9 @@ export function ReminderList() {
               showToast("Lembrete criado!", "success");
             }
             await reload();
-          } catch (e: any) {
-            showToast(e.message || "Falha ao salvar.", "error");
+            setOpenForm(false);
+          } catch (error: any) {
+            showToast(error?.message || "Falha ao salvar.", "error");
           }
         }}
       />
@@ -145,8 +177,9 @@ export function ReminderList() {
           try {
             await deleteRule(removingId);
             showToast("Lembrete removido!", "success");
-          } catch (e: any) {
-            showToast(e.message || "Falha ao remover.", "error");
+            await reload();
+          } catch (error: any) {
+            showToast(error?.message || "Falha ao remover.", "error");
           } finally {
             setRemovingId(null);
           }
@@ -156,13 +189,14 @@ export function ReminderList() {
       <MarkDoneDialog
         open={Boolean(markId)}
         onClose={() => setMarkId(null)}
-        onConfirm={async (odo, doneAt) => {
+        onConfirm={async (odometerKm, doneAtISO) => {
           if (!markId) return;
           try {
-            await markDone(markId, odo, doneAt);
+            await markDone(markId, odometerKm, doneAtISO);
             showToast("Lembrete marcado como feito!", "success");
-          } catch (e: any) {
-            showToast(e.message || "Falha ao marcar como feito.", "error");
+            await reload();
+          } catch (error: any) {
+            showToast(error?.message || "Falha ao marcar como feito.", "error");
           } finally {
             setMarkId(null);
           }
@@ -176,12 +210,13 @@ export function ReminderList() {
           if (!snoozeId || !days) {
             setSnoozeId(null);
             return;
-          } // early-return
+          }
           try {
-            await snoozeRule!(snoozeId, days); // asserção não-nula para o TS
+            await snoozeRule!(snoozeId, days);
             showToast(`Lembrete adiado em ${days} dia(s).`, "info");
-          } catch (e: any) {
-            showToast(e.message || "Falha ao adiar.", "error");
+            await reload();
+          } catch (error: any) {
+            showToast(error?.message || "Falha ao adiar.", "error");
           } finally {
             setSnoozeId(null);
           }

@@ -3,76 +3,119 @@ export const dynamic = "force-dynamic";
 
 import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/utils/db";
-import { getServerSession } from "next-auth/next";
+import { buildValidationError } from "@/lib/validations/errors";
+import { ReminderCreateSchema } from "@/lib/validations/reminder";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
-/** Parse seguro para datas vinda do cliente.
- *  Aceita "yyyy-mm-dd" ou ISO completo. Retorna Date ou undefined.
- */
-function parseDateSafe(input: any): Date | undefined {
-  if (typeof input !== "string") return undefined;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
-    return new Date(`${input}T00:00:00.000Z`);
-  }
-  const d = new Date(input);
-  return Number.isNaN(d.getTime()) ? undefined : d;
+function parseDateOnlyToUTC(dateISO: string): Date {
+  const [y, m, d] = dateISO.split("-").map((v) => Number(v));
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const pageIndex = Number(searchParams.get("pageIndex") ?? "0");
+    const pageSize = Number(searchParams.get("pageSize") ?? "10");
+    const vehicleId = searchParams.get("vehicleId") ?? undefined;
+
+    const where = {
+      userId: session.user.id,
+      ...(vehicleId ? { vehicleId } : {}),
+    };
+
+    const [reminderRules, totalCount] = await Promise.all([
+      prisma.reminderRule.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: pageIndex * pageSize,
+        take: pageSize,
+      }),
+      prisma.reminderRule.count({ where }),
+    ]);
+
+    return NextResponse.json(
+      { data: reminderRules, totalCount },
+      { status: 200 }
+    );
+  } catch {
+    return NextResponse.json(
+      { message: "Erro ao listar lembretes." },
+      { status: 500 }
+    );
   }
-  const userId = (session.user as any).id;
-
-  const items = await prisma.reminderRule.findMany({
-    where: { userId, isActive: true },
-    orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-  });
-
-  return NextResponse.json(items, { status: 200 });
 }
 
-/** POST /api/reminders
- *  Cria uma regra de lembrete para o usuário autenticado.
- *  Campos aceitos (todos opcionais além de title/type):
- *   - vehicleId
- *   - type ("OIL_CHANGE" | "SERVICE" | "DOCUMENT" | "FINE" | "CUSTOM")
- *   - title (string)
- *   - notes (string)
- *   - everyKm (number)
- *   - everyDays (number)
- *   - lastDoneKm (number)
- *   - lastDoneAt ("yyyy-mm-dd" ou ISO)
- *   - dueDate ("yyyy-mm-dd" ou ISO)
- */
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function POST(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    const requestBody = await request.json();
+    const validationResult = ReminderCreateSchema.safeParse(requestBody);
+
+    if (!validationResult.success) {
+      return NextResponse.json(
+        buildValidationError(
+          "Erro de validação ao criar lembrete.",
+          validationResult.error.issues
+        ),
+        { status: 422 }
+      );
+    }
+
+    const {
+      vehicleId,
+      type,
+      title,
+      notes,
+      everyKm,
+      everyDays,
+      lastDoneKm,
+      lastDoneAtISO,
+      dueDateISO,
+      warnKmLeft,
+      warnDaysLeft,
+      isActive,
+    } = validationResult.data;
+
+    const createdReminder = await prisma.reminderRule.create({
+      data: {
+        userId: session.user.id,
+        vehicleId: vehicleId ?? null,
+        type,
+        title,
+        notes: notes ?? null,
+        everyKm: everyKm ?? null,
+        everyDays: everyDays ?? null,
+        lastDoneKm: lastDoneKm ?? null,
+        lastDoneAt: lastDoneAtISO ? parseDateOnlyToUTC(lastDoneAtISO) : null,
+        dueDate: dueDateISO ? parseDateOnlyToUTC(dueDateISO) : null,
+        warnKmLeft: warnKmLeft ?? undefined, // tem default(500)
+        warnDaysLeft: warnDaysLeft ?? undefined, // tem default(15)
+        isActive: typeof isActive === "boolean" ? isActive : undefined, // default(true)
+      },
+    });
+
+    return NextResponse.json({ data: createdReminder }, { status: 201 });
+  } catch {
+    return NextResponse.json(
+      { message: "Erro ao criar lembrete." },
+      { status: 500 }
+    );
   }
-  const userId = (session.user as any).id;
-
-  const body = await req.json().catch(() => ({} as any));
-
-  // Coerções leves (evita 500 por tipos errados vindos do cliente)
-  const data = {
-    userId,
-    vehicleId: body.vehicleId ?? null,
-    type: body.type, // validado pelo Prisma enum
-    title: body.title,
-    notes: body.notes ?? null,
-    everyKm: body.everyKm != null ? Number(body.everyKm) : null,
-    everyDays: body.everyDays != null ? Number(body.everyDays) : null,
-    lastDoneKm: body.lastDoneKm != null ? Number(body.lastDoneKm) : null,
-    lastDoneAt: parseDateSafe(body.lastDoneAt) ?? null,
-    dueDate: parseDateSafe(body.dueDate) ?? null,
-    // por padrão um lembrete novo é ativo
-    isActive: true,
-  } as const;
-
-  // Cria a regra
-  const created = await prisma.reminderRule.create({ data });
-
-  return NextResponse.json(created, { status: 201 });
 }

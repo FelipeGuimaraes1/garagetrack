@@ -1,89 +1,133 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/utils/db";
+import { buildValidationError } from "@/lib/validations/errors";
+import { ExpenseUpdateSchema } from "@/lib/validations/expense";
+import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
-export const runtime = "nodejs";
-
-/**
- * Atualiza uma despesa do usuário autenticado
- */
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const id = params.id;
-  const body = await req.json().catch(() => ({}));
-  const userId = (session.user as any).id;
-
-  // Garante que a despesa pertence ao usuário
-  const owned = await prisma.expense.findUnique({
-    where: { id },
-    select: { userId: true },
-  });
-  if (!owned || owned.userId !== userId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  // Normaliza date: aceitar "YYYY-MM-DD" ou Date/ISO completo
-  let dateField: Date | undefined;
-  if (typeof body.date === "string") {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
-      dateField = new Date(`${body.date}T00:00:00.000Z`);
-    } else {
-      const d = new Date(body.date);
-      if (!Number.isNaN(d.getTime())) dateField = d;
-    }
-  }
-
-  const updated = await prisma.expense.update({
-    where: { id },
-    data: {
-      vehicleId: body.vehicleId ?? undefined,
-      type: body.type ?? undefined,
-      status: body.status ?? undefined,
-      date: dateField ?? undefined,
-      amount: body.amount ?? undefined,
-      description: body.description ?? undefined,
-      km: body.km ?? undefined,
-      fuelLiters: body.fuelLiters ?? undefined,
-      pricePerLiter: body.pricePerLiter ?? undefined,
-      fuelType: body.fuelType ?? undefined,
-      station: body.station ?? undefined,
-    },
-  });
-
-  return NextResponse.json(updated);
+function parseDateOnlyToUTC(dateISO: string): Date {
+  const [y, m, d] = dateISO.split("-").map((v) => Number(v));
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
-/**
- * Remove uma despesa do usuário autenticado
- */
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+type RouteParams = { params: { id: string } };
 
-  const id = params.id;
-  const userId = (session.user as any).id;
+export async function PATCH(request: Request, context: RouteParams) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
 
-  // Garante posse antes de deletar
-  const owned = await prisma.expense.findUnique({
-    where: { id },
-    select: { userId: true },
-  });
-  if (!owned || owned.userId !== userId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const expenseId = context.params.id;
+    const existing = await prisma.expense.findFirst({
+      where: { id: expenseId, userId: session.user.id },
+      include: { attachments: true },
+    });
+    if (!existing) {
+      return NextResponse.json(
+        { message: "Despesa não encontrada." },
+        { status: 404 }
+      );
+    }
+
+    const requestBody = await request.json();
+    const validationResult = ExpenseUpdateSchema.safeParse({
+      ...requestBody,
+      id: expenseId,
+    });
+
+    if (!validationResult.success) {
+      return NextResponse.json(
+        buildValidationError(
+          "Erro de validação ao atualizar despesa.",
+          validationResult.error.issues
+        ),
+        { status: 422 }
+      );
+    }
+
+    const dataToUpdate = { ...validationResult.data } as any;
+    delete dataToUpdate.id;
+
+    const prismaData: any = {};
+
+    if (typeof dataToUpdate.vehicleId !== "undefined")
+      prismaData.vehicleId = dataToUpdate.vehicleId;
+    if (typeof dataToUpdate.type !== "undefined")
+      prismaData.type = dataToUpdate.type;
+    if (typeof dataToUpdate.status !== "undefined")
+      prismaData.status = dataToUpdate.status;
+    if (typeof dataToUpdate.dateISO !== "undefined")
+      prismaData.date = parseDateOnlyToUTC(dataToUpdate.dateISO);
+    if (typeof dataToUpdate.amount !== "undefined")
+      prismaData.amount = new Prisma.Decimal(dataToUpdate.amount);
+    if (typeof dataToUpdate.description !== "undefined")
+      prismaData.description = dataToUpdate.description;
+    if (typeof dataToUpdate.km !== "undefined")
+      prismaData.km = new Prisma.Decimal(dataToUpdate.km);
+    if (typeof dataToUpdate.fuelLiters !== "undefined")
+      prismaData.fuelLiters = new Prisma.Decimal(dataToUpdate.fuelLiters);
+    if (typeof dataToUpdate.pricePerLiter !== "undefined")
+      prismaData.pricePerLiter = new Prisma.Decimal(dataToUpdate.pricePerLiter);
+    if (typeof dataToUpdate.fuelType !== "undefined")
+      prismaData.fuelType = dataToUpdate.fuelType;
+    if (typeof dataToUpdate.station !== "undefined")
+      prismaData.station = dataToUpdate.station;
+
+    const updatedExpense = await prisma.expense.update({
+      where: { id: expenseId },
+      data: prismaData,
+      include: { attachments: true },
+    });
+
+    return NextResponse.json({ data: updatedExpense }, { status: 200 });
+  } catch {
+    return NextResponse.json(
+      { message: "Erro ao atualizar despesa." },
+      { status: 500 }
+    );
   }
+}
 
-  await prisma.expense.delete({ where: { id } });
+export async function DELETE(_request: Request, context: RouteParams) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
 
-  return new NextResponse(null, { status: 204 });
+    const expenseId = context.params.id;
+    const existing = await prisma.expense.findFirst({
+      where: { id: expenseId, userId: session.user.id },
+    });
+    if (!existing) {
+      return NextResponse.json(
+        { message: "Despesa não encontrada." },
+        { status: 404 }
+      );
+    }
+
+    await prisma.expense.delete({ where: { id: expenseId } });
+
+    return NextResponse.json(
+      { message: "Despesa excluída com sucesso." },
+      { status: 200 }
+    );
+  } catch {
+    return NextResponse.json(
+      { message: "Erro ao excluir despesa." },
+      { status: 500 }
+    );
+  }
 }

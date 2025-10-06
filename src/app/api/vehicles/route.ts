@@ -1,68 +1,102 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/utils/db";
+import { buildValidationError } from "@/lib/validations/errors";
+import { VehicleCreateSchema } from "@/lib/validations/vehicle";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
-export const runtime = "nodejs";
+export async function GET(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
 
-const FuelEnum = z.enum(["GASOLINA", "ETANOL", "DIESEL", "GNV", "FLEX"]);
+    const { searchParams } = new URL(request.url);
+    const pageIndex = Number(searchParams.get("pageIndex") ?? "0");
+    const pageSize = Number(searchParams.get("pageSize") ?? "10");
 
-const baseVehicleSchema = z.object({
-  nickname: z.string().trim().min(1).max(80).optional(),
-  plate: z.string().trim().max(12).optional(), // você valida o formato em outro lugar se quiser
-  odometerKm: z.number().int().nonnegative().optional(),
-  fuelDefault: FuelEnum.optional(),
-});
+    const [vehicles, totalCount] = await Promise.all([
+      prisma.vehicle.findMany({
+        where: { userId: session.user.id },
+        orderBy: { createdAt: "desc" },
+        skip: pageIndex * pageSize,
+        take: pageSize,
+      }),
+      prisma.vehicle.count({ where: { userId: session.user.id } }),
+    ]);
 
-/**
- * Lista veículos do usuário autenticado
- */
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const userId = (session.user as any).id;
-
-  const list = await prisma.vehicle.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return NextResponse.json(list);
-}
-
-/**
- * Cria veículo para o usuário autenticado
- */
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const userId = (session.user as any).id;
-
-  const json = await req.json().catch(() => null);
-  const parsed = baseVehicleSchema.safeParse(json);
-  if (!parsed.success) {
+    return NextResponse.json({ data: vehicles, totalCount }, { status: 200 });
+  } catch {
     return NextResponse.json(
-      { error: "ValidationError", issues: parsed.error.format() },
-      { status: 400 }
+      { message: "Erro ao listar veículos." },
+      { status: 500 }
     );
   }
+}
 
-  const data = parsed.data;
+export async function POST(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
 
-  const created = await prisma.vehicle.create({
-    data: {
-      userId,
-      nickname: data.nickname ?? null,
-      plate: data.plate ?? null,
-      odometerKm: data.odometerKm ?? null,
-      fuelDefault: data.fuelDefault ?? null,
-    },
-  });
+    const requestBody = await request.json();
+    const validationResult = VehicleCreateSchema.safeParse(requestBody);
 
-  return NextResponse.json(created, { status: 201 });
+    if (!validationResult.success) {
+      return NextResponse.json(
+        buildValidationError(
+          "Erro de validação ao criar veículo.",
+          validationResult.error.issues
+        ),
+        { status: 422 }
+      );
+    }
+
+    const { nickname, plate, odometerKm, fuelDefault } = validationResult.data;
+
+    const createdVehicle = await prisma.vehicle.create({
+      data: {
+        userId: session.user.id,
+        nickname: nickname ?? null,
+        plate: plate ?? null,
+        odometerKm: typeof odometerKm === "number" ? odometerKm : null,
+        fuelDefault: fuelDefault ?? null,
+      },
+    });
+
+    return NextResponse.json({ data: createdVehicle }, { status: 201 });
+  } catch (error: any) {
+    // Violação de unique (plate por usuário)
+    if (error?.code === "P2002") {
+      return NextResponse.json(
+        {
+          message: "Erro de validação ao criar veículo.",
+          issues: [
+            {
+              path: "plate",
+              message: "Você já possui um veículo com esta placa.",
+            },
+          ],
+        },
+        { status: 422 }
+      );
+    }
+
+    return NextResponse.json(
+      { message: "Erro ao criar veículo." },
+      { status: 500 }
+    );
+  }
 }

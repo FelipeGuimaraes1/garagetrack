@@ -15,13 +15,13 @@ export type Expense = {
     | "OUTRO";
   status: "PAGO" | "PENDENTE";
   date: string; // ISO
-  amount: number;
+  amount: number | string; // pode vir como Decimal serializado
   description: string;
-  km: number | null;
+  km: number | string | null;
 
   // abastecimento
-  fuelLiters?: number | null;
-  pricePerLiter?: number | null;
+  fuelLiters?: number | string | null;
+  pricePerLiter?: number | string | null;
   fuelType?: "GASOLINA" | "ETANOL" | "DIESEL" | "GNV" | null;
   station?: string | null;
 
@@ -39,7 +39,7 @@ export type Expense = {
 
 export type ExpenseFilters = {
   page?: number;
-  // adicione outros filtros se quiser (vehicleId, type, status, range etc.)
+  // (filtros extras entrarão aqui)
 };
 
 type CreateInput = Omit<
@@ -55,6 +55,30 @@ type CreateInput = Omit<
 
 type UpdateInput = Partial<CreateInput>;
 
+/** Normaliza payloads variados para array + metadados de paginação. */
+function normalizeExpenseResponse(payload: any): {
+  items: Expense[];
+  page: number;
+  totalPages: number;
+} {
+  const items: Expense[] = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.items)
+    ? payload.items
+    : Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload?.results)
+    ? payload.results
+    : [];
+
+  const page = Number(payload?.page) || Number(payload?.pagination?.page) || 1;
+
+  const totalPages =
+    Number(payload?.totalPages) || Number(payload?.pagination?.totalPages) || 1;
+
+  return { items, page, totalPages };
+}
+
 export function useExpenses(initialFilters: ExpenseFilters = { page: 1 }) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -65,32 +89,37 @@ export function useExpenses(initialFilters: ExpenseFilters = { page: 1 }) {
   });
 
   const load = useCallback(
-    async (next?: ExpenseFilters) => {
-      const merged = { ...filters, ...(next || {}) };
-      setFilters(merged);
+    async (nextFilters?: ExpenseFilters) => {
+      const mergedFilters = { ...filters, ...(nextFilters || {}) };
+      setFilters(mergedFilters);
       setIsLoading(true);
       setErrorMessage(null);
       try {
-        const qs = new URLSearchParams();
-        if (merged.page) qs.set("page", String(merged.page));
-        const res = await fetch(`/api/expenses?${qs.toString()}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) {
-          const txt = await res.text().catch(() => "");
-          throw new Error(txt || "Falha ao carregar despesas.");
+        const queryString = new URLSearchParams();
+        if (mergedFilters.page)
+          queryString.set("page", String(mergedFilters.page));
+
+        const response = await fetch(
+          `/api/expenses?${queryString.toString()}`,
+          {
+            cache: "no-store",
+            credentials: "include",
+          }
+        );
+
+        if (!response.ok) {
+          const text = await response.text().catch(() => "");
+          throw new Error(text || "Falha ao carregar despesas.");
         }
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setExpenses(data);
-          setTotalPages(1);
-        } else {
-          setExpenses(Array.isArray(data.items) ? data.items : []);
-          setTotalPages(Number(data.totalPages || 1));
-          if (data.page) setFilters((f) => ({ ...f, page: data.page }));
-        }
-      } catch (e: any) {
-        setErrorMessage(e?.message || "Erro ao buscar despesas.");
+
+        const json = await response.json();
+        const { items, page, totalPages } = normalizeExpenseResponse(json);
+
+        setExpenses(items);
+        setTotalPages(totalPages);
+        setFilters((previous) => ({ ...previous, page }));
+      } catch (error: any) {
+        setErrorMessage(error?.message || "Erro ao buscar despesas.");
         setExpenses([]);
       } finally {
         setIsLoading(false);
@@ -104,43 +133,56 @@ export function useExpenses(initialFilters: ExpenseFilters = { page: 1 }) {
   }, []); // primeira carga
 
   const createExpense = useCallback(async (input: CreateInput) => {
-    const res = await fetch("/api/expenses", {
+    const response = await fetch("/api/expenses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(input),
     });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(txt || "Erro ao criar despesa.");
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(text || "Erro ao criar despesa.");
     }
-    const created: Expense = await res.json();
-    // otimista: injeta no topo
-    setExpenses((prev) => [created, ...prev]);
+    const created: Expense = await response.json();
+    setExpenses((previous) => [created, ...previous]);
     return created;
   }, []);
 
-  const updateExpense = useCallback(async (id: string, input: UpdateInput) => {
-    const res = await fetch(`/api/expenses/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(txt || "Erro ao atualizar despesa.");
-    }
-    const updated: Expense = await res.json();
-    setExpenses((prev) => prev.map((e) => (e.id === id ? updated : e)));
-    return updated;
-  }, []);
+  const updateExpense = useCallback(
+    async (expenseId: string, input: UpdateInput) => {
+      const response = await fetch(`/api/expenses/${expenseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(text || "Erro ao atualizar despesa.");
+      }
+      const updated: Expense = await response.json();
+      setExpenses((previous) =>
+        previous.map((expense) =>
+          expense.id === expenseId ? updated : expense
+        )
+      );
+      return updated;
+    },
+    []
+  );
 
-  const deleteExpense = useCallback(async (id: string) => {
-    const res = await fetch(`/api/expenses/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(txt || "Erro ao excluir despesa.");
+  const deleteExpense = useCallback(async (expenseId: string) => {
+    const response = await fetch(`/api/expenses/${expenseId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(text || "Erro ao excluir despesa.");
     }
-    setExpenses((prev) => prev.filter((e) => e.id !== id));
+    setExpenses((previous) =>
+      previous.filter((expense) => expense.id !== expenseId)
+    );
   }, []);
 
   const helpers = useMemo(

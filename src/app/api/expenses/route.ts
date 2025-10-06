@@ -3,84 +3,136 @@ export const dynamic = "force-dynamic";
 
 import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/utils/db";
+import { buildValidationError } from "@/lib/validations/errors";
+import { ExpenseCreateSchema } from "@/lib/validations/expense";
+import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
-/** GET /api/expenses?vehicleId=...&type=...&month=YYYY-MM */
-export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { searchParams } = new URL(req.url);
-  const vehicleId = searchParams.get("vehicleId") || undefined;
-  const type = searchParams.get("type") || undefined;
-  const month = searchParams.get("month") || undefined;
-
-  const where: any = { userId: (session.user as any).id };
-  if (vehicleId) where.vehicleId = vehicleId;
-  if (type) where.type = type;
-
-  // Filtro mensal sem problemas de fuso
-  if (month && /^\d{4}-\d{2}$/.test(month)) {
-    const [y, m] = month.split("-").map((n) => parseInt(n, 10));
-    const from = new Date(Date.UTC(y, m - 1, 1));
-    const to = new Date(Date.UTC(y, m, 1));
-    where.date = { gte: from, lt: to };
-  }
-
-  const list = await prisma.expense.findMany({
-    where,
-    include: {
-      attachments: true,
-      vehicle: { select: { nickname: true, plate: true } },
-    },
-    orderBy: { date: "desc" },
-  });
-
-  return NextResponse.json(list, { status: 200 });
+function parseDateOnlyToUTC(dateISO: string): Date {
+  // "YYYY-MM-DD" -> Date em UTC (meia-noite)
+  const [y, m, d] = dateISO.split("-").map((v) => Number(v));
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
-/** POST /api/expenses  -> cria despesa para o usuário logado */
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
 
-  const body = await req.json().catch(() => ({}));
+    const { searchParams } = new URL(request.url);
+    const pageIndex = Number(searchParams.get("pageIndex") ?? "0");
+    const pageSize = Number(searchParams.get("pageSize") ?? "10");
+    const vehicleId = searchParams.get("vehicleId") ?? undefined;
 
-  // body.date deve vir como "YYYY-MM-DD". Convertendo para ISO completo (UTC meia-noite)
-  const dateISO =
-    typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
-      ? new Date(`${body.date}T00:00:00.000Z`)
-      : new Date(body.date); // fallback, caso já venha completo
+    const where = {
+      userId: session.user.id,
+      ...(vehicleId ? { vehicleId } : {}),
+    };
 
-  const created = await prisma.expense.create({
-    data: {
-      userId: (session.user as any).id,
-      vehicleId: body.vehicleId,
-      type: body.type,
-      status: body.status,
-      date: dateISO, // <- agora é um Date válido em ISO
-      amount: body.amount,
-      description: body.description,
-      km: body.km ?? null,
-      fuelLiters: body.fuelLiters ?? null,
-      pricePerLiter: body.pricePerLiter ?? null,
-      fuelType: body.fuelType ?? null,
-      station: body.station ?? null,
-      attachments: body.attachments?.length
-        ? {
-            create: body.attachments.map((a: any) => ({
-              url: a.url,
-              contentType: a.contentType ?? null,
-              size: a.size ?? null,
-            })),
-          }
-        : undefined,
-    },
-    include: { attachments: true },
-  });
+    const [expenses, totalCount] = await Promise.all([
+      prisma.expense.findMany({
+        where,
+        orderBy: { date: "desc" },
+        skip: pageIndex * pageSize,
+        take: pageSize,
+        include: { attachments: true },
+      }),
+      prisma.expense.count({ where }),
+    ]);
 
-  return NextResponse.json(created, { status: 201 });
+    return NextResponse.json({ data: expenses, totalCount }, { status: 200 });
+  } catch {
+    return NextResponse.json(
+      { message: "Erro ao listar despesas." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    const requestBody = await request.json();
+    const validationResult = ExpenseCreateSchema.safeParse(requestBody);
+
+    if (!validationResult.success) {
+      return NextResponse.json(
+        buildValidationError(
+          "Erro de validação ao criar despesa.",
+          validationResult.error.issues
+        ),
+        { status: 422 }
+      );
+    }
+
+    const {
+      vehicleId,
+      type,
+      status,
+      dateISO,
+      amount,
+      description,
+      km,
+      fuelLiters,
+      pricePerLiter,
+      fuelType,
+      station,
+      attachments,
+    } = validationResult.data;
+
+    const createdExpense = await prisma.expense.create({
+      data: {
+        userId: session.user.id,
+        vehicleId,
+        type,
+        status, // se vier undefined, Prisma usa default(PENDENTE)
+        date: parseDateOnlyToUTC(dateISO),
+        amount: new Prisma.Decimal(amount),
+        description,
+        km: typeof km !== "undefined" ? new Prisma.Decimal(km) : null,
+        fuelLiters:
+          typeof fuelLiters !== "undefined"
+            ? new Prisma.Decimal(fuelLiters)
+            : null,
+        pricePerLiter:
+          typeof pricePerLiter !== "undefined"
+            ? new Prisma.Decimal(pricePerLiter)
+            : null,
+        fuelType: fuelType ?? null,
+        station: station ?? null,
+        attachments: attachments
+          ? {
+              createMany: {
+                data: attachments.map((a) => ({
+                  url: a.url,
+                  contentType: a.contentType ?? null,
+                  size: typeof a.size === "number" ? a.size : null,
+                })),
+              },
+            }
+          : undefined,
+      },
+      include: { attachments: true },
+    });
+
+    return NextResponse.json({ data: createdExpense }, { status: 201 });
+  } catch {
+    return NextResponse.json(
+      { message: "Erro ao criar despesa." },
+      { status: 500 }
+    );
+  }
 }

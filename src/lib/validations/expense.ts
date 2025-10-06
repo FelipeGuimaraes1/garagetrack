@@ -1,57 +1,76 @@
+import { ExpenseStatus, ExpenseType, FuelType } from "@prisma/client";
 import { z } from "zod";
+import { ISODateOnlySchema } from "./date";
+import { DecimalStringSchema } from "./decimal";
 
-// Auxiliares para números com 2 casas decimais
-const moneyNumber = z.number().min(0).max(9_999_999).multipleOf(0.01);
-const decimal2 = z.number().min(0).max(9_999_999).multipleOf(0.01);
+const urlRegex = /^(https?:\/\/)([\w.-]+)(:[0-9]+)?(\/[\w\-./?%&=]*)?$/i;
 
-export const expenseCreateSchema = z.object({
-  vehicleId: z.string().uuid(),
-  type: z.enum([
-    "ABASTECIMENTO",
-    "MANUTENCAO",
-    "IMPOSTO",
-    "SEGURO",
-    "MULTA",
-    "OUTRO",
-  ]),
-  status: z.enum(["PAGO", "PENDENTE"]).optional().default("PENDENTE"),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // yyyy-mm-dd
-  amount: moneyNumber,
-  description: z.string().trim().min(1).max(300),
-  km: z.number().int().min(0).max(9_999_999).optional().nullable(),
-
-  // Campos específicos de abastecimento
-  fuelLiters: decimal2.optional().nullable(),
-  pricePerLiter: decimal2.optional().nullable(),
-  fuelType: z
-    .enum(["GASOLINA", "ETANOL", "DIESEL", "GNV"])
-    .optional()
-    .nullable(),
-  station: z.string().trim().max(120).optional().nullable(),
+export const ExpenseAttachmentInputSchema = z.object({
+  url: z.string().regex(urlRegex, "A URL do anexo deve ser válida."),
+  contentType: z
+    .string()
+    .max(120, "O tipo de conteúdo deve ter no máximo 120 caracteres.")
+    .optional(),
+  size: z
+    .number()
+    .int("O tamanho deve ser inteiro (bytes).")
+    .positive("O tamanho deve ser maior que zero.")
+    .optional(),
 });
 
-export const expenseUpdateSchema = expenseCreateSchema.partial();
+export const ExpenseCreateSchema = z
+  .object({
+    vehicleId: z
+      .string()
+      .uuid("O identificador do veículo deve ser um UUID válido."),
 
-export const expenseListQuerySchema = z.object({
-  vehicleId: z.string().uuid().optional(),
-  type: z
-    .enum([
-      "ABASTECIMENTO",
-      "MANUTENCAO",
-      "IMPOSTO",
-      "SEGURO",
-      "MULTA",
-      "OUTRO",
-    ])
-    .optional(),
-  dateFrom: z
+    type: z.nativeEnum(ExpenseType),
+
+    status: z.nativeEnum(ExpenseStatus).optional(), // default PENDENTE no banco
+
+    dateISO: ISODateOnlySchema, // será convertido para Date
+
+    amount: DecimalStringSchema, // será convertido para Prisma.Decimal
+
+    description: z
+      .string()
+      .min(2, "A descrição deve ter pelo menos 2 caracteres.")
+      .max(300, "A descrição deve ter no máximo 300 caracteres."),
+
+    km: DecimalStringSchema.optional(),
+
+    fuelLiters: DecimalStringSchema.optional(),
+    pricePerLiter: DecimalStringSchema.optional(),
+    fuelType: z.nativeEnum(FuelType).optional(),
+    station: z
+      .string()
+      .max(120, "O nome do posto deve ter no máximo 120 caracteres.")
+      .optional(),
+
+    attachments: z
+      .array(ExpenseAttachmentInputSchema)
+      .max(10, "Você pode enviar no máximo 10 anexos.")
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.type !== "ABASTECIMENTO") return true;
+      return (
+        typeof data.fuelLiters !== "undefined" &&
+        typeof data.pricePerLiter !== "undefined" &&
+        typeof data.fuelType !== "undefined"
+      );
+    },
+    {
+      message:
+        "Para despesas do tipo ABASTECIMENTO, informe 'fuelLiters', 'pricePerLiter' e 'fuelType'.",
+      path: ["type"],
+    }
+  );
+
+export const ExpenseUpdateSchema = ExpenseCreateSchema.partial().extend({
+  id: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .uuid("O identificador da despesa deve ser um UUID válido.")
     .optional(),
-  dateTo: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-  page: z.coerce.number().int().min(1).optional().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
 });

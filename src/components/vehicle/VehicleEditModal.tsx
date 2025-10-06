@@ -7,6 +7,12 @@ import { emitAppEvent } from "@/lib/utils/events";
 import { maskOdometer, maskPlate } from "@/lib/utils/mask-br";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+/**
+ * Tipagem básica do retorno de erro 422 da API.
+ */
+type ValidationIssue = { path: string; message: string };
+type ValidationErrorPayload = { message: string; issues?: ValidationIssue[] };
+
 type Props = {
   vehicleId: string | null;
   open: boolean;
@@ -19,17 +25,28 @@ const fuelOptions = ["GASOLINA", "ETANOL", "DIESEL", "GNV", "FLEX"] as const;
 export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
   const { vehicles, updateVehicle } = useVehicles();
   const { showToast } = useToast();
+
   const current = useMemo(
-    () => vehicles.find((v) => v.id === vehicleId),
+    () => vehicles.find((vehicle) => vehicle.id === vehicleId),
     [vehicles, vehicleId]
   );
 
+  // Estados de formulário
   const [nickname, setNickname] = useState("");
   const [plate, setPlate] = useState("");
   const [fuelDefault, setFuelDefault] = useState<string>("");
   const [odometerKm, setOdometerKm] = useState("");
 
-  // A11y
+  // Estados de erros por campo
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Referências para focar no primeiro campo com erro
+  const nicknameInputRef = useRef<HTMLInputElement>(null);
+  const plateInputRef = useRef<HTMLInputElement>(null);
+  const fuelDefaultSelectRef = useRef<HTMLSelectElement>(null);
+  const odometerInputRef = useRef<HTMLInputElement>(null);
+
+  // Acessibilidade
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(
     panelRef as unknown as React.RefObject<HTMLElement | null>,
@@ -37,14 +54,16 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
   );
   useEffect(() => {
     if (!open) return;
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const onEsc = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
   }, [open, onClose]);
 
+  // Carrega dados atuais quando o veículo muda
   useEffect(() => {
+    setFormErrors({});
     if (current) {
       setNickname(current.nickname ?? "");
       setPlate(current.plate ?? "");
@@ -55,9 +74,53 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
     }
   }, [current]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function mapIssuesToFormErrors(payload: ValidationErrorPayload): {
+    errors: Record<string, string>;
+    firstErrorKey: string | null;
+  } {
+    const mapped: Record<string, string> = {};
+    let firstKey: string | null = null;
+
+    if (Array.isArray(payload.issues)) {
+      for (const issue of payload.issues) {
+        const key = issue.path || "general";
+        if (!mapped[key]) {
+          mapped[key] = issue.message;
+          if (!firstKey) firstKey = key;
+        }
+      }
+    }
+    return { errors: mapped, firstErrorKey: firstKey };
+  }
+
+  function focusFirstErrorField(firstErrorKey: string | null) {
+    if (!firstErrorKey) return;
+    const normalizedKey = firstErrorKey.toLowerCase();
+
+    if (normalizedKey.includes("nickname")) {
+      nicknameInputRef.current?.focus();
+      return;
+    }
+    if (normalizedKey.includes("plate")) {
+      plateInputRef.current?.focus();
+      return;
+    }
+    if (normalizedKey.includes("fuel")) {
+      fuelDefaultSelectRef.current?.focus();
+      return;
+    }
+    if (normalizedKey.includes("odometer")) {
+      odometerInputRef.current?.focus();
+      return;
+    }
+    panelRef.current?.focus();
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
     if (!vehicleId) return;
+
+    setFormErrors({});
 
     try {
       await updateVehicle(vehicleId, {
@@ -66,12 +129,29 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
         fuelDefault: (fuelDefault || null) as any,
         odometerKm: odometerKm ? Number(odometerKm) : null,
       } as any);
+
       emitAppEvent("gt:vehicles:changed");
       showToast("Veículo atualizado com sucesso!", "success");
       if (onSaved) await onSaved();
       onClose();
-    } catch (err: any) {
-      showToast(err.message || "Erro ao atualizar veículo.", "error");
+    } catch (unknownError: any) {
+      const payload: ValidationErrorPayload | undefined =
+        unknownError?.data || unknownError?.response?.data;
+
+      if (payload?.issues && Array.isArray(payload.issues)) {
+        const { errors, firstErrorKey } = mapIssuesToFormErrors(payload);
+        setFormErrors(errors);
+        showToast(
+          payload.message || "Há erros de validação no formulário.",
+          "error"
+        );
+        focusFirstErrorField(firstErrorKey);
+      } else {
+        showToast(
+          unknownError?.message || "Erro ao atualizar veículo.",
+          "error"
+        );
+      }
     }
   }
 
@@ -83,13 +163,14 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="vehicle-edit-title"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
       }}
     >
       <div
         ref={panelRef}
         className="modal-panel w-full max-w-md max-h-[85dvh] overflow-y-auto"
+        tabIndex={-1}
       >
         <div className="p-4 sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
           <div className="flex items-center justify-between">
@@ -105,52 +186,98 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
           </div>
         </div>
 
-        <form className="space-y-3 p-4 pt-3" onSubmit={handleSubmit}>
+        <form className="space-y-3 p-4 pt-3" onSubmit={handleSubmit} noValidate>
+          {/* Apelido */}
           <div>
             <label className="block text-sm mb-1">Apelido</label>
             <input
+              ref={nicknameInputRef}
               value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
+              onChange={(event) => setNickname(event.target.value)}
               className="w-full px-3 py-2"
+              aria-invalid={Boolean(formErrors.nickname)}
+              aria-describedby={
+                formErrors.nickname ? "error-nickname" : undefined
+              }
             />
+            {formErrors.nickname && (
+              <p id="error-nickname" className="mt-1 text-sm text-red-400">
+                {formErrors.nickname}
+              </p>
+            )}
           </div>
 
+          {/* Placa */}
           <div>
             <label className="block text-sm mb-1">Placa</label>
             <input
+              ref={plateInputRef}
               value={plate}
-              onChange={(e) => setPlate(maskPlate(e.target.value))}
+              onChange={(event) => setPlate(maskPlate(event.target.value))}
               className="w-full px-3 py-2"
               maxLength={8}
+              placeholder="Ex.: ABC1D23 (Mercosul) ou ABC1234 (antiga)"
+              aria-invalid={Boolean(formErrors.plate)}
+              aria-describedby={formErrors.plate ? "error-plate" : undefined}
             />
+            {formErrors.plate && (
+              <p id="error-plate" className="mt-1 text-sm text-red-400">
+                {formErrors.plate}
+              </p>
+            )}
           </div>
 
+          {/* Combustível padrão */}
           <div>
             <label className="block text-sm mb-1">Combustível padrão</label>
             <select
+              ref={fuelDefaultSelectRef}
               value={fuelDefault}
-              onChange={(e) => setFuelDefault(e.target.value)}
+              onChange={(event) => setFuelDefault(event.target.value)}
               className="w-full px-3 py-2"
+              aria-invalid={Boolean(formErrors.fuelDefault)}
+              aria-describedby={
+                formErrors.fuelDefault ? "error-fuelDefault" : undefined
+              }
             >
               <option value="">Selecione</option>
-              {fuelOptions.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
+              {fuelOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
                 </option>
               ))}
             </select>
+            {formErrors.fuelDefault && (
+              <p id="error-fuelDefault" className="mt-1 text-sm text-red-400">
+                {formErrors.fuelDefault}
+              </p>
+            )}
           </div>
 
+          {/* Hodômetro */}
           <div>
             <label className="block text-sm mb-1">Hodômetro (km)</label>
             <input
+              ref={odometerInputRef}
               value={odometerKm}
-              onChange={(e) => setOdometerKm(maskOdometer(e.target.value))}
+              onChange={(event) =>
+                setOdometerKm(maskOdometer(event.target.value))
+              }
               inputMode="numeric"
               className="w-full px-3 py-2"
+              aria-invalid={Boolean(formErrors.odometerKm)}
+              aria-describedby={
+                formErrors.odometerKm ? "error-odometerKm" : undefined
+              }
             />
+            {formErrors.odometerKm && (
+              <p id="error-odometerKm" className="mt-1 text-sm text-red-400">
+                {formErrors.odometerKm}
+              </p>
+            )}
           </div>
 
+          {/* Ações */}
           <div className="pt-2 flex justify-end gap-2 sticky bottom-0 bg-[var(--surface)] border-t border-[var(--border)] mt-2">
             <button
               type="button"
