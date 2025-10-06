@@ -4,7 +4,7 @@ import { useExpenses } from "@/hooks/useExpenses";
 import { useVehicles } from "@/hooks/useVehicles";
 import { useState } from "react";
 
-const types = [
+const expenseTypes = [
   "ABASTECIMENTO",
   "MANUTENCAO",
   "IMPOSTO",
@@ -17,19 +17,20 @@ export function ExpenseFilters() {
   const { vehicles } = useVehicles();
   const { filters, reload } = useExpenses();
 
+  // Estados locais iniciam com os filtros atuais do hook (quando houver)
   const [vehicleId, setVehicleId] = useState<string>(filters.vehicleId || "");
   const [type, setType] = useState<string>(filters.type || "");
   const [dateFrom, setDateFrom] = useState<string>(filters.dateFrom || "");
   const [dateTo, setDateTo] = useState<string>(filters.dateTo || "");
 
-  function applyFilters(e: React.FormEvent) {
-    e.preventDefault();
+  function applyFilters(event: React.FormEvent) {
+    event.preventDefault();
     void reload({
+      page: 1, // sempre volta para a primeira página
       vehicleId: vehicleId || undefined,
       type: (type || undefined) as any,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
-      page: 1,
     });
   }
 
@@ -39,11 +40,11 @@ export function ExpenseFilters() {
     setDateFrom("");
     setDateTo("");
     void reload({
+      page: 1,
       vehicleId: undefined,
       type: undefined,
       dateFrom: undefined,
       dateTo: undefined,
-      page: 1,
     });
   }
 
@@ -58,9 +59,9 @@ export function ExpenseFilters() {
             className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
           >
             <option value="">Todos</option>
-            {vehicles.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.nickname || v.plate || "Sem apelido"}
+            {vehicles.map((vehicle) => (
+              <option key={vehicle.id} value={vehicle.id}>
+                {vehicle.nickname || vehicle.plate || "Sem apelido"}
               </option>
             ))}
           </select>
@@ -74,9 +75,9 @@ export function ExpenseFilters() {
             className="w-full rounded-lg bg-transparent border border-[var(--border)] px-3 py-2"
           >
             <option value="">Todos</option>
-            {types.map((t) => (
-              <option key={t} value={t}>
-                {t}
+            {expenseTypes.map((value) => (
+              <option key={value} value={value}>
+                {value}
               </option>
             ))}
           </select>

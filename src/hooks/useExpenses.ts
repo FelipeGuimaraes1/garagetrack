@@ -25,7 +25,7 @@ export type Expense = {
   fuelType?: "GASOLINA" | "ETANOL" | "DIESEL" | "GNV" | null;
   station?: string | null;
 
-  // join simples opcional
+  // join opcional
   vehicle?: {
     id: string;
     nickname: string | null;
@@ -38,8 +38,12 @@ export type Expense = {
 };
 
 export type ExpenseFilters = {
-  page?: number;
-  // (filtros extras entrarão aqui)
+  page?: number; // 1-based
+  pageSize?: number; // default 10
+  vehicleId?: string; // filtro por veículo
+  type?: Expense["type"]; // filtro por tipo
+  dateFrom?: string; // "YYYY-MM-DD"
+  dateTo?: string; // "YYYY-MM-DD"
 };
 
 type CreateInput = Omit<
@@ -55,12 +59,12 @@ type CreateInput = Omit<
 
 type UpdateInput = Partial<CreateInput>;
 
-/** Normaliza payloads variados para array + metadados de paginação. */
-function normalizeExpenseResponse(payload: any): {
-  items: Expense[];
-  page: number;
-  totalPages: number;
-} {
+/** Normaliza resposta em formatos variados. */
+function normalizeExpenseResponse(
+  payload: any,
+  fallbackPageSize: number
+): { items: Expense[]; page: number; totalPages: number } {
+  // itens
   const items: Expense[] = Array.isArray(payload)
     ? payload
     : Array.isArray(payload?.items)
@@ -71,21 +75,35 @@ function normalizeExpenseResponse(payload: any): {
     ? payload.results
     : [];
 
+  // paginação
   const page = Number(payload?.page) || Number(payload?.pagination?.page) || 1;
 
+  const totalPagesFromPayload =
+    Number(payload?.totalPages) || Number(payload?.pagination?.totalPages) || 0;
+
   const totalPages =
-    Number(payload?.totalPages) || Number(payload?.pagination?.totalPages) || 1;
+    totalPagesFromPayload ||
+    (typeof payload?.totalCount === "number"
+      ? Math.max(1, Math.ceil(payload.totalCount / (fallbackPageSize || 10)))
+      : 1);
 
   return { items, page, totalPages };
 }
 
-export function useExpenses(initialFilters: ExpenseFilters = { page: 1 }) {
+export function useExpenses(
+  initialFilters: ExpenseFilters = { page: 1, pageSize: 10 }
+) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
   const [filters, setFilters] = useState<ExpenseFilters>({
     page: initialFilters.page ?? 1,
+    pageSize: initialFilters.pageSize ?? 10,
+    vehicleId: initialFilters.vehicleId,
+    type: initialFilters.type,
+    dateFrom: initialFilters.dateFrom,
+    dateTo: initialFilters.dateTo,
   });
 
   const load = useCallback(
@@ -94,10 +112,20 @@ export function useExpenses(initialFilters: ExpenseFilters = { page: 1 }) {
       setFilters(mergedFilters);
       setIsLoading(true);
       setErrorMessage(null);
+
       try {
         const queryString = new URLSearchParams();
         if (mergedFilters.page)
           queryString.set("page", String(mergedFilters.page));
+        if (mergedFilters.pageSize)
+          queryString.set("pageSize", String(mergedFilters.pageSize));
+        if (mergedFilters.vehicleId)
+          queryString.set("vehicleId", mergedFilters.vehicleId);
+        if (mergedFilters.type) queryString.set("type", mergedFilters.type);
+        if (mergedFilters.dateFrom)
+          queryString.set("dateFrom", mergedFilters.dateFrom);
+        if (mergedFilters.dateTo)
+          queryString.set("dateTo", mergedFilters.dateTo);
 
         const response = await fetch(
           `/api/expenses?${queryString.toString()}`,
@@ -113,7 +141,10 @@ export function useExpenses(initialFilters: ExpenseFilters = { page: 1 }) {
         }
 
         const json = await response.json();
-        const { items, page, totalPages } = normalizeExpenseResponse(json);
+        const { items, page, totalPages } = normalizeExpenseResponse(
+          json,
+          mergedFilters.pageSize || 10
+        );
 
         setExpenses(items);
         setTotalPages(totalPages);
@@ -129,8 +160,8 @@ export function useExpenses(initialFilters: ExpenseFilters = { page: 1 }) {
   );
 
   useEffect(() => {
-    void load();
-  }, []); // primeira carga
+    void load(); // primeira carga
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createExpense = useCallback(async (input: CreateInput) => {
     const response = await fetch("/api/expenses", {
@@ -143,7 +174,7 @@ export function useExpenses(initialFilters: ExpenseFilters = { page: 1 }) {
       const text = await response.text().catch(() => "");
       throw new Error(text || "Erro ao criar despesa.");
     }
-    const created: Expense = await response.json();
+    const created: Expense = await response.json().then((j) => j.data ?? j);
     setExpenses((previous) => [created, ...previous]);
     return created;
   }, []);

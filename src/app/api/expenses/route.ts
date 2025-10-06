@@ -9,10 +9,12 @@ import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
+/**
+ * Converte "YYYY-MM-DD" para Date UTC (meia-noite) — campo date é @db.Date.
+ */
 function parseDateOnlyToUTC(dateISO: string): Date {
-  // "YYYY-MM-DD" -> Date em UTC (meia-noite)
-  const [y, m, d] = dateISO.split("-").map((v) => Number(v));
-  return new Date(Date.UTC(y, m - 1, d));
+  const [year, month, day] = dateISO.split("-").map((value) => Number(value));
+  return new Date(Date.UTC(year, month - 1, day));
 }
 
 export async function GET(request: Request) {
@@ -26,27 +28,59 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const pageIndex = Number(searchParams.get("pageIndex") ?? "0");
-    const pageSize = Number(searchParams.get("pageSize") ?? "10");
-    const vehicleId = searchParams.get("vehicleId") ?? undefined;
 
-    const where = {
+    // Paginação padronizada (page = 1-based)
+    const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
+    const pageSize = Math.max(1, Number(searchParams.get("pageSize") ?? "10"));
+    const skip = (page - 1) * pageSize;
+
+    // Filtros opcionais
+    const vehicleId = searchParams.get("vehicleId") ?? undefined;
+    const type = searchParams.get("type") ?? undefined;
+    const dateFromISO = searchParams.get("dateFrom") ?? undefined; // YYYY-MM-DD
+    const dateToISO = searchParams.get("dateTo") ?? undefined; // YYYY-MM-DD
+
+    const where: Prisma.ExpenseWhereInput = {
       userId: session.user.id,
       ...(vehicleId ? { vehicleId } : {}),
+      ...(type ? { type: type as any } : {}),
+      ...(dateFromISO || dateToISO
+        ? {
+            date: {
+              ...(dateFromISO ? { gte: parseDateOnlyToUTC(dateFromISO) } : {}),
+              ...(dateToISO ? { lte: parseDateOnlyToUTC(dateToISO) } : {}),
+            },
+          }
+        : {}),
     };
 
     const [expenses, totalCount] = await Promise.all([
       prisma.expense.findMany({
         where,
         orderBy: { date: "desc" },
-        skip: pageIndex * pageSize,
+        skip,
         take: pageSize,
-        include: { attachments: true },
+        include: {
+          attachments: true,
+          vehicle: { select: { id: true, nickname: true, plate: true } }, // usado na lista
+        },
       }),
       prisma.expense.count({ where }),
     ]);
 
-    return NextResponse.json({ data: expenses, totalCount }, { status: 200 });
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+    // Padrão de resposta mais completo e estável
+    return NextResponse.json(
+      {
+        items: expenses,
+        page,
+        pageSize,
+        totalPages,
+        totalCount,
+      },
+      { status: 200 }
+    );
   } catch {
     return NextResponse.json(
       { message: "Erro ao listar despesas." },
@@ -98,7 +132,7 @@ export async function POST(request: Request) {
         userId: session.user.id,
         vehicleId,
         type,
-        status, // se vier undefined, Prisma usa default(PENDENTE)
+        status, // se undefined, Prisma usa default(PENDENTE)
         date: parseDateOnlyToUTC(dateISO),
         amount: new Prisma.Decimal(amount),
         description,
@@ -116,18 +150,22 @@ export async function POST(request: Request) {
         attachments: attachments
           ? {
               createMany: {
-                data: attachments.map((a) => ({
-                  url: a.url,
-                  contentType: a.contentType ?? null,
-                  size: typeof a.size === "number" ? a.size : null,
+                data: attachments.map((att) => ({
+                  url: att.url,
+                  contentType: att.contentType ?? null,
+                  size: typeof att.size === "number" ? att.size : null,
                 })),
               },
             }
           : undefined,
       },
-      include: { attachments: true },
+      include: {
+        attachments: true,
+        vehicle: { select: { id: true, nickname: true, plate: true } },
+      },
     });
 
+    // Padrão consistente com GET (mas em created fica prático devolver em "data")
     return NextResponse.json({ data: createdExpense }, { status: 201 });
   } catch {
     return NextResponse.json(
