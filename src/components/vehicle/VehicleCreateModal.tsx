@@ -10,8 +10,7 @@ import { emitAppEvent } from "@/lib/utils/events";
 import { maskOdometer, maskPlate } from "@/lib/utils/mask-br";
 
 /**
- * Tipagem básica do retorno de erro 422 da API.
- * Mantemos genérica para aceitar variações do hook useVehicles.
+ * Tipagem do retorno de erro 422.
  */
 type ValidationIssue = { path: string; message: string };
 type ValidationErrorPayload = { message: string; issues?: ValidationIssue[] };
@@ -24,23 +23,23 @@ export function VehicleCreateModal({ open, onClose }: Props) {
   const { createVehicle, reload } = useVehicles();
   const { showToast } = useToast();
 
-  // Estados de formulário
+  // Form state
   const [nickname, setNickname] = useState("");
   const [plate, setPlate] = useState("");
   const [fuelDefault, setFuelDefault] = useState<string>("");
   const [odometerKm, setOdometerKm] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Estados de erros por campo (para exibição sob cada input)
+  // Field errors
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Referências para focar no primeiro campo com erro
+  // Refs para foco no primeiro erro
   const nicknameInputRef = useRef<HTMLInputElement>(null);
   const plateInputRef = useRef<HTMLInputElement>(null);
   const fuelDefaultSelectRef = useRef<HTMLSelectElement>(null);
   const odometerInputRef = useRef<HTMLInputElement>(null);
 
-  // Acessibilidade: focus trap e ESC para fechar
+  // A11y
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, open);
   useEffect(() => {
@@ -52,17 +51,12 @@ export function VehicleCreateModal({ open, onClose }: Props) {
     return () => document.removeEventListener("keydown", handleEscapeKey);
   }, [open, onClose]);
 
-  /**
-   * Mapeia payload de erro (422) para um dicionário { campo: mensagem }
-   * e retorna a chave do primeiro campo com erro para focar.
-   */
   function mapIssuesToFormErrors(payload: ValidationErrorPayload): {
     errors: Record<string, string>;
     firstErrorKey: string | null;
   } {
     const mapped: Record<string, string> = {};
     let firstKey: string | null = null;
-
     if (Array.isArray(payload.issues)) {
       for (const issue of payload.issues) {
         const key = issue.path || "general";
@@ -75,31 +69,16 @@ export function VehicleCreateModal({ open, onClose }: Props) {
     return { errors: mapped, firstErrorKey: firstKey };
   }
 
-  /**
-   * Foca o primeiro campo com erro conhecido.
-   */
   function focusFirstErrorField(firstErrorKey: string | null) {
     if (!firstErrorKey) return;
     const normalizedKey = firstErrorKey.toLowerCase();
-
-    if (normalizedKey.includes("nickname")) {
-      nicknameInputRef.current?.focus();
-      return;
-    }
-    if (normalizedKey.includes("plate")) {
-      plateInputRef.current?.focus();
-      return;
-    }
-    if (normalizedKey.includes("fuel")) {
-      fuelDefaultSelectRef.current?.focus();
-      return;
-    }
-    if (normalizedKey.includes("odometer")) {
-      odometerInputRef.current?.focus();
-      return;
-    }
-
-    // fallback: foca o título do modal
+    if (normalizedKey.includes("nickname"))
+      return nicknameInputRef.current?.focus();
+    if (normalizedKey.includes("plate")) return plateInputRef.current?.focus();
+    if (normalizedKey.includes("fuel"))
+      return fuelDefaultSelectRef.current?.focus();
+    if (normalizedKey.includes("odometer"))
+      return odometerInputRef.current?.focus();
     panelRef.current?.focus();
   }
 
@@ -107,46 +86,36 @@ export function VehicleCreateModal({ open, onClose }: Props) {
     event.preventDefault();
     if (submitting) return;
     setSubmitting(true);
-    setFormErrors({}); // limpa erros anteriores
+    setFormErrors({});
 
     try {
+      // Envie UNDEFINED quando o campo estiver vazio — evita "expected string/number, received null"
       await createVehicle({
-        nickname: nickname || null,
-        plate: plate || null,
-        fuelDefault: (fuelDefault || null) as any,
-        odometerKm: odometerKm ? Number(odometerKm) : null,
+        nickname: nickname.trim() || undefined,
+        plate: plate.trim() || undefined,
+        fuelDefault: (fuelDefault as any) || undefined,
+        odometerKm: odometerKm ? Number(odometerKm) : undefined,
       });
 
-      // Dispara eventos locais que você já usa
       emitAppEvent("gt:vehicles:changed");
       await reload().catch(() => {});
-
-      // Força o server component a refazer a busca no banco
       router.refresh();
-
       showToast("Veículo criado com sucesso!", "success");
 
-      // Limpa formulário e fecha
+      // Reset
       setNickname("");
       setPlate("");
       setFuelDefault("");
       setOdometerKm("");
       onClose();
     } catch (unknownError: any) {
-      // Tenta extrair payload 422 estruturado
-      const payload: ValidationErrorPayload | undefined =
-        unknownError?.data || unknownError?.response?.data;
-
-      if (payload?.issues && Array.isArray(payload.issues)) {
+      // Hook agora propaga { status, payload }
+      const payload: ValidationErrorPayload | undefined = unknownError?.payload;
+      if (unknownError?.status === 422 && payload?.issues) {
         const { errors, firstErrorKey } = mapIssuesToFormErrors(payload);
         setFormErrors(errors);
-        showToast(
-          payload.message || "Há erros de validação no formulário.",
-          "error"
-        );
         focusFirstErrorField(firstErrorKey);
       } else {
-        // Mensagem genérica
         showToast(unknownError?.message || "Erro ao criar veículo.", "error");
       }
     } finally {

@@ -7,9 +7,6 @@ import { emitAppEvent } from "@/lib/utils/events";
 import { maskOdometer, maskPlate } from "@/lib/utils/mask-br";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-/**
- * Tipagem básica do retorno de erro 422 da API.
- */
 type ValidationIssue = { path: string; message: string };
 type ValidationErrorPayload = { message: string; issues?: ValidationIssue[] };
 
@@ -31,27 +28,24 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
     [vehicles, vehicleId]
   );
 
-  // Estados de formulário
   const [nickname, setNickname] = useState("");
   const [plate, setPlate] = useState("");
   const [fuelDefault, setFuelDefault] = useState<string>("");
   const [odometerKm, setOdometerKm] = useState("");
 
-  // Estados de erros por campo
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Referências para focar no primeiro campo com erro
   const nicknameInputRef = useRef<HTMLInputElement>(null);
   const plateInputRef = useRef<HTMLInputElement>(null);
   const fuelDefaultSelectRef = useRef<HTMLSelectElement>(null);
   const odometerInputRef = useRef<HTMLInputElement>(null);
 
-  // Acessibilidade
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(
     panelRef as unknown as React.RefObject<HTMLElement | null>,
     open
   );
+
   useEffect(() => {
     if (!open) return;
     const onEsc = (event: KeyboardEvent) => {
@@ -61,7 +55,6 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
     return () => document.removeEventListener("keydown", onEsc);
   }, [open, onClose]);
 
-  // Carrega dados atuais quando o veículo muda
   useEffect(() => {
     setFormErrors({});
     if (current) {
@@ -80,7 +73,6 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
   } {
     const mapped: Record<string, string> = {};
     let firstKey: string | null = null;
-
     if (Array.isArray(payload.issues)) {
       for (const issue of payload.issues) {
         const key = issue.path || "general";
@@ -96,23 +88,13 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
   function focusFirstErrorField(firstErrorKey: string | null) {
     if (!firstErrorKey) return;
     const normalizedKey = firstErrorKey.toLowerCase();
-
-    if (normalizedKey.includes("nickname")) {
-      nicknameInputRef.current?.focus();
-      return;
-    }
-    if (normalizedKey.includes("plate")) {
-      plateInputRef.current?.focus();
-      return;
-    }
-    if (normalizedKey.includes("fuel")) {
-      fuelDefaultSelectRef.current?.focus();
-      return;
-    }
-    if (normalizedKey.includes("odometer")) {
-      odometerInputRef.current?.focus();
-      return;
-    }
+    if (normalizedKey.includes("nickname"))
+      return nicknameInputRef.current?.focus();
+    if (normalizedKey.includes("plate")) return plateInputRef.current?.focus();
+    if (normalizedKey.includes("fuel"))
+      return fuelDefaultSelectRef.current?.focus();
+    if (normalizedKey.includes("odometer"))
+      return odometerInputRef.current?.focus();
     panelRef.current?.focus();
   }
 
@@ -121,30 +103,23 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
     if (!vehicleId) return;
 
     setFormErrors({});
-
     try {
       await updateVehicle(vehicleId, {
-        nickname: nickname || null,
-        plate: plate || null,
-        fuelDefault: (fuelDefault || null) as any,
-        odometerKm: odometerKm ? Number(odometerKm) : null,
-      } as any);
+        nickname: nickname.trim() || undefined,
+        plate: plate.trim() || undefined,
+        fuelDefault: (fuelDefault as any) || undefined,
+        odometerKm: odometerKm ? Number(odometerKm) : undefined,
+      });
 
       emitAppEvent("gt:vehicles:changed");
       showToast("Veículo atualizado com sucesso!", "success");
       if (onSaved) await onSaved();
       onClose();
     } catch (unknownError: any) {
-      const payload: ValidationErrorPayload | undefined =
-        unknownError?.data || unknownError?.response?.data;
-
-      if (payload?.issues && Array.isArray(payload.issues)) {
+      const payload: ValidationErrorPayload | undefined = unknownError?.payload;
+      if (unknownError?.status === 422 && payload?.issues) {
         const { errors, firstErrorKey } = mapIssuesToFormErrors(payload);
         setFormErrors(errors);
-        showToast(
-          payload.message || "Há erros de validação no formulário.",
-          "error"
-        );
         focusFirstErrorField(firstErrorKey);
       } else {
         showToast(

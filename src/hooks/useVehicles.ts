@@ -9,29 +9,40 @@ export type Vehicle = {
   plate: string | null;
   fuelDefault: "GASOLINA" | "ETANOL" | "DIESEL" | "GNV" | "FLEX" | null;
   odometerKm: number | null;
-  createdAt: string; // ISO vindo da API
+  createdAt: string;
   updatedAt: string;
 };
 
+/** Entrada para criação/edição (campos opcionais = undefined quando vazios) */
 type CreateInput = {
-  nickname: string | null;
-  plate: string | null;
-  fuelDefault: Vehicle["fuelDefault"];
-  odometerKm: number | null;
+  nickname?: string;
+  plate?: string;
+  fuelDefault?: Vehicle["fuelDefault"];
+  odometerKm?: number;
 };
-
 type UpdateInput = Partial<CreateInput>;
 
-/** Normaliza diferentes formatos de resposta para sempre obter um array de veículos. */
-function normalizeVehicleList(payload: unknown): Vehicle[] {
-  if (Array.isArray(payload)) return payload as Vehicle[];
-  if (payload && Array.isArray((payload as any).items))
-    return (payload as any).items as Vehicle[];
-  if (payload && Array.isArray((payload as any).data))
-    return (payload as any).data as Vehicle[];
-  if (payload && Array.isArray((payload as any).results))
-    return (payload as any).results as Vehicle[];
+/** Erro de validação estruturado (422) que a API devolve */
+export type ValidationIssue = { path: string; message: string };
+export type ValidationErrorPayload = {
+  message: string;
+  issues?: ValidationIssue[];
+};
+
+/** Normaliza respostas diferentes (array ou {data}) para um array de veículos */
+function normalizeListResponse(payload: any): Vehicle[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
   return [];
+}
+
+/** Extrai JSON com segurança */
+async function safeJson(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 }
 
 export function useVehicles() {
@@ -43,19 +54,17 @@ export function useVehicles() {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const response = await fetch("/api/vehicles", {
+      const res = await fetch("/api/vehicles", {
         method: "GET",
         cache: "no-store",
-        credentials: "include", // garante envio de cookies/sessão
       });
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        throw new Error(text || "Falha ao carregar veículos.");
+      const json = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(json?.message || "Falha ao carregar veículos.");
       }
-      const json = await response.json();
-      setVehicles(normalizeVehicleList(json));
-    } catch (error: any) {
-      setErrorMessage(error?.message || "Erro ao buscar veículos.");
+      setVehicles(normalizeListResponse(json));
+    } catch (e: any) {
+      setErrorMessage(e?.message || "Erro ao buscar veículos.");
       setVehicles([]);
     } finally {
       setIsLoading(false);
@@ -63,61 +72,62 @@ export function useVehicles() {
   }, []);
 
   useEffect(() => {
-    void load(); // primeira carga
+    void load();
   }, [load]);
 
   const createVehicle = useCallback(async (input: CreateInput) => {
-    const response = await fetch("/api/vehicles", {
+    const res = await fetch("/api/vehicles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify(input),
     });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new Error(text || "Erro ao criar veículo.");
+    const json = await safeJson(res);
+
+    if (!res.ok) {
+      // Propaga erro 422 com {message, issues[]} para os modais mostrarem por campo
+      const err: any = new Error(json?.message || "Erro ao criar veículo.");
+      err.status = res.status;
+      err.payload = json;
+      throw err;
     }
-    const created: Vehicle = await response.json();
-    // UI otimista: injeta no topo
-    setVehicles((previous) => [created, ...previous]);
+
+    const created: Vehicle = json?.data ?? json;
+    setVehicles((prev) => [created, ...prev]);
     return created;
   }, []);
 
-  const updateVehicle = useCallback(
-    async (vehicleId: string, input: UpdateInput) => {
-      const response = await fetch(`/api/vehicles/${vehicleId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(input),
-      });
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        throw new Error(text || "Erro ao atualizar veículo.");
-      }
-      const updated: Vehicle = await response.json();
-      setVehicles((previous) =>
-        previous.map((vehicle) =>
-          vehicle.id === vehicleId ? updated : vehicle
-        )
-      );
-      return updated;
-    },
-    []
-  );
+  const updateVehicle = useCallback(async (id: string, input: UpdateInput) => {
+    const res = await fetch(`/api/vehicles/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+    const json = await safeJson(res);
 
-  const deleteVehicle = useCallback(async (vehicleId: string) => {
-    const response = await fetch(`/api/vehicles/${vehicleId}`, {
+    if (!res.ok) {
+      const err: any = new Error(json?.message || "Erro ao atualizar veículo.");
+      err.status = res.status;
+      err.payload = json;
+      throw err;
+    }
+
+    const updated: Vehicle = json?.data ?? json;
+    setVehicles((prev) => prev.map((v) => (v.id === id ? updated : v)));
+    return updated;
+  }, []);
+
+  const deleteVehicle = useCallback(async (id: string) => {
+    const res = await fetch(`/api/vehicles/${id}`, {
       method: "DELETE",
       credentials: "include",
     });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new Error(text || "Erro ao excluir veículo.");
+    const json = await safeJson(res);
+    if (!res.ok) {
+      throw new Error(json?.message || "Erro ao excluir veículo.");
     }
-    setVehicles((previous) =>
-      previous.filter((vehicle) => vehicle.id !== vehicleId)
-    );
+    setVehicles((prev) => prev.filter((v) => v.id !== id));
   }, []);
 
   const helpers = useMemo(
