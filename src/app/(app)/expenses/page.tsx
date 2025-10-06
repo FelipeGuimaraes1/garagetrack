@@ -12,7 +12,10 @@ export default function ExpensesPage() {
     <section className="space-y-4">
       <div className="panel p-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Despesas</h1>
-        <button onClick={() => setIsOpen(true)} className="button-primary">
+        <button
+          onClick={() => setIsOpen(true)}
+          className="button-primary cursor-pointer"
+        >
           Nova despesa
         </button>
       </div>

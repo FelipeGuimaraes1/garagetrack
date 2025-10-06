@@ -17,7 +17,7 @@ export function ExpenseFilters() {
   const { vehicles } = useVehicles();
   const { filters, reload } = useExpenses();
 
-  // Estados locais iniciam com os filtros atuais do hook (quando houver)
+  // Estados locais iniciam com os filtros atuais do hook
   const [vehicleId, setVehicleId] = useState<string>(filters.vehicleId || "");
   const [type, setType] = useState<string>(filters.type || "");
   const [dateFrom, setDateFrom] = useState<string>(filters.dateFrom || "");
@@ -26,7 +26,7 @@ export function ExpenseFilters() {
   function applyFilters(event: React.FormEvent) {
     event.preventDefault();
     void reload({
-      page: 1, // sempre volta para a primeira página
+      page: 1,
       vehicleId: vehicleId || undefined,
       type: (type || undefined) as any,
       dateFrom: dateFrom || undefined,
@@ -46,6 +46,28 @@ export function ExpenseFilters() {
       dateFrom: undefined,
       dateTo: undefined,
     });
+  }
+
+  /** Monta a URL de export respeitando os filtros atuais (da UI local). */
+  function buildExportUrl(): string {
+    const params = new URLSearchParams();
+    if (vehicleId) params.set("vehicleId", vehicleId);
+    if (type) params.set("type", type);
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
+    // pode ajustar limite aqui se necessário: params.set("limit","50000")
+    return `/api/expenses/export?${params.toString()}`;
+  }
+
+  function exportCsv() {
+    // Força download criando um link temporário
+    const url = buildExportUrl();
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = ""; // filename é definido no header da resposta
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   }
 
   return (
@@ -105,16 +127,30 @@ export function ExpenseFilters() {
         </div>
       </div>
 
-      <div className="flex gap-2 justify-end">
+      <div className="flex flex-col sm:flex-row gap-2 justify-end">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 cursor-pointer"
+          >
+            Limpar
+          </button>
+          <button type="submit" className="button-primary cursor-pointer">
+            Aplicar
+          </button>
+        </div>
+
+        <div className="grow" />
+
         <button
           type="button"
-          onClick={clearFilters}
-          className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
+          onClick={exportCsv}
+          className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 cursor-pointer"
+          aria-label="Exportar CSV"
+          title="Exportar CSV (respeitando os filtros)"
         >
-          Limpar
-        </button>
-        <button type="submit" className="button-primary">
-          Aplicar
+          Exportar CSV
         </button>
       </div>
     </form>

@@ -36,7 +36,7 @@ export function VehicleList() {
 
         <button
           onClick={() => setOpenCreate(true)}
-          className="button-primary inline-flex items-center gap-2"
+          className="button-primary inline-flex items-center gap-2 cursor-pointer"
         >
           <Plus size={16} />
           Novo veículo
@@ -82,14 +82,14 @@ export function VehicleList() {
                 <div className="shrink-0 flex gap-2">
                   <button
                     onClick={() => setEditingId(vehicle.id)}
-                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm cursor-pointer"
                     aria-label="Editar veículo"
                   >
                     <Edit2 size={16} />
                   </button>
                   <button
                     onClick={() => setRemovingId(vehicle.id)}
-                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm cursor-pointer"
                     aria-label="Remover veículo"
                   >
                     <Trash2 size={16} className="text-[var(--danger)]" />

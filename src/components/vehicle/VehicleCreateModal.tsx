@@ -178,7 +178,7 @@ export function VehicleCreateModal({ open, onClose }: Props) {
             </h2>
             <button
               onClick={onClose}
-              className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
+              className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5 cursor-pointer"
             >
               Fechar
             </button>
