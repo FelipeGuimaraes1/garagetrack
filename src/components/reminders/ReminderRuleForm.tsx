@@ -39,7 +39,7 @@ export function ReminderRuleForm({
   const [mode, setMode] = useState<Mode>("KM");
   const [everyKm, setEveryKm] = useState<string>("");
   const [everyDays, setEveryDays] = useState<string>("");
-  const [dueDate, setDueDate] = useState<string>("");
+  const [dueDate, setDueDate] = useState<string>(""); // YYYY-MM-DD
 
   const [warnKmLeft, setWarnKmLeft] = useState<string>("500");
   const [warnDaysLeft, setWarnDaysLeft] = useState<string>("15");
@@ -55,11 +55,20 @@ export function ReminderRuleForm({
     // tenta deduzir o modo a partir dos valores existentes
     if (defaultValues.everyKm) setMode("KM");
     else if (defaultValues.everyDays) setMode("DIAS");
-    else if (defaultValues.dueDate) setMode("DATA");
+    else if (defaultValues.dueDateISO || defaultValues.dueDate) setMode("DATA");
 
     setEveryKm(defaultValues.everyKm?.toString() ?? "");
     setEveryDays(defaultValues.everyDays?.toString() ?? "");
-    setDueDate(defaultValues.dueDate ? defaultValues.dueDate.slice(0, 10) : "");
+    // aceita dueDateISO (string) ou dueDate (Date) vindos de algum lugar
+    if (typeof defaultValues.dueDateISO === "string") {
+      setDueDate(defaultValues.dueDateISO);
+    } else if (defaultValues.dueDate instanceof Date) {
+      setDueDate(defaultValues.dueDate.toISOString().slice(0, 10));
+    } else if (typeof defaultValues.dueDate === "string") {
+      setDueDate(defaultValues.dueDate.slice(0, 10));
+    } else {
+      setDueDate("");
+    }
 
     setWarnKmLeft(defaultValues.warnKmLeft?.toString() ?? "500");
     setWarnDaysLeft(defaultValues.warnDaysLeft?.toString() ?? "15");
@@ -76,23 +85,22 @@ export function ReminderRuleForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
+    // Monte SOMENTE os campos preenchidos (undefined para opcionais)
     const payload: any = {
-      vehicleId: vehicleId || null,
+      vehicleId: vehicleId ? vehicleId : null, // schema permite null/optional
       type,
-      title,
-      notes: notes || null,
-      everyKm: null,
-      everyDays: null,
-      dueDate: null,
-      warnKmLeft: warnKmLeft ? Number(warnKmLeft) : 500,
-      warnDaysLeft: warnDaysLeft ? Number(warnDaysLeft) : 15,
+      title: title.trim(),
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
+
+      // janelas de aviso (opcionais)
+      ...(warnKmLeft ? { warnKmLeft: Number(warnKmLeft) } : {}),
+      ...(warnDaysLeft ? { warnDaysLeft: Number(warnDaysLeft) } : {}),
       isActive,
     };
 
     if (mode === "KM" && everyKm) payload.everyKm = Number(everyKm);
     if (mode === "DIAS" && everyDays) payload.everyDays = Number(everyDays);
-    if (mode === "DATA" && dueDate)
-      payload.dueDate = new Date(`${dueDate}T00:00:00`);
+    if (mode === "DATA" && dueDate) payload.dueDateISO = dueDate; // << chave certa para o schema
 
     await onSubmit(payload);
     onClose();

@@ -45,7 +45,9 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
   const [date, setDate] = useState<string>("");
   const [amountMasked, setAmountMasked] = useState("");
   const [description, setDescription] = useState("");
-  const [km, setKm] = useState("");
+
+  const [kmTrip, setKmTrip] = useState("");
+  const [vehicleOdometerKm, setVehicleOdometerKm] = useState("");
 
   const [fuelLitersMasked, setFuelLitersMasked] = useState("");
   const [pricePerLiterMasked, setPricePerLiterMasked] = useState("");
@@ -57,12 +59,12 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
   useEffect(() => {
     if (current) {
       setVehicleId(current.vehicleId);
-      setType(current.type);
-      setStatus(current.status);
+      setType(current.type as any);
+      setStatus(current.status as any);
       setDate(new Date(current.date).toISOString().slice(0, 10));
       setAmountMasked(maskCurrencyBRL(String(current.amount)));
       setDescription(current.description);
-      setKm(current.km != null ? String(current.km) : "");
+      setKmTrip(current.km != null ? String(current.km) : "");
       setFuelLitersMasked(
         current.fuelLiters != null
           ? String(current.fuelLiters).replace(".", ",")
@@ -90,7 +92,10 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
         date,
         amount: unmaskCurrencyBRL(amountMasked),
         description,
-        km: km ? Number(km) : null,
+        km: kmTrip ? Number(kmTrip) : null,
+        vehicleOdometerKm: vehicleOdometerKm
+          ? Number(vehicleOdometerKm)
+          : undefined,
       };
 
       if (isAbastecimento) {
@@ -127,9 +132,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
   );
   useEffect(() => {
     if (!open) return;
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
+    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
   }, [open, onClose]);
@@ -240,14 +243,32 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm mb-1">Hodômetro (km)</label>
-            <input
-              inputMode="numeric"
-              value={km}
-              onChange={(e) => setKm(e.target.value.replace(/\D/g, ""))}
-              className="w-full px-3 py-2"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm mb-1">Hodômetro (km)</label>
+              <input
+                inputMode="numeric"
+                value={kmTrip}
+                onChange={(e) =>
+                  setKmTrip(e.target.value.replace(/[^\d,]/g, ""))
+                }
+                className="w-full px-3 py-2"
+                placeholder="Ex.: 80010 ou 352,4"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">Km total do veículo</label>
+              <input
+                inputMode="numeric"
+                value={vehicleOdometerKm}
+                onChange={(e) =>
+                  setVehicleOdometerKm(e.target.value.replace(/\D/g, ""))
+                }
+                className="w-full px-3 py-2"
+                placeholder="Ex.: 105980"
+              />
+            </div>
           </div>
 
           {isAbastecimento && (
@@ -282,7 +303,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
                   className="w-full px-3 py-2"
                 >
                   <option value="">Selecione</option>
-                  {["GASOLINA", "ETANOL", "DIESEL", "GNV"].map((f) => (
+                  {fuelTypes.map((f) => (
                     <option key={f} value={f}>
                       {f}
                     </option>

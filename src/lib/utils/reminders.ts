@@ -8,12 +8,18 @@ export async function getCurrentOdometer(
     where: { id: vehicleId },
     select: { odometerKm: true },
   });
+
   const lastKmAgg = await prisma.expense.aggregate({
     where: { vehicleId },
     _max: { km: true },
   });
-  const kmFromExpenses = lastKmAgg._max.km ?? null;
-  const base = v?.odometerKm ?? null;
+
+  // Prisma retorna Prisma.Decimal | null — converta para number
+  const kmFromExpenses: number | null =
+    lastKmAgg._max.km != null ? Number(lastKmAgg._max.km) : null;
+
+  const base: number | null = v?.odometerKm ?? null;
+
   if (base == null && kmFromExpenses == null) return null;
   return Math.max(base ?? 0, kmFromExpenses ?? 0);
 }

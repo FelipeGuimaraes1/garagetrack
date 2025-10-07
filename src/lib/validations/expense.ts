@@ -37,8 +37,13 @@ export const ExpenseCreateSchema = z
       .min(2, "A descrição deve ter pelo menos 2 caracteres.")
       .max(300, "A descrição deve ter no máximo 300 caracteres."),
 
+    /** Hodômetro percorrido (Trip A/B). Opcional. */
     km: DecimalStringSchema.optional(),
 
+    /** >> NOVO: Km total do veículo (obrigatório) */
+    vehicleOdometerKm: DecimalStringSchema, // required
+
+    // Campos de abastecimento (obrigatórios se type=ABASTECIMENTO)
     fuelLiters: DecimalStringSchema.optional(),
     pricePerLiter: DecimalStringSchema.optional(),
     fuelType: z.nativeEnum(FuelType).optional(),

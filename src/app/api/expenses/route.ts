@@ -125,8 +125,24 @@ export async function POST(request: Request) {
       fuelType,
       station,
       attachments,
+      // novo campo obrigatório no form (quilometragem total do veículo)
+      vehicleOdometerKm,
     } = validationResult.data;
 
+    // Atualiza o hodômetro total do veículo (Vehicle.odometerKm é Int?)
+    // - Use apenas where por id (chave única)
+    // - Use number (nada de Prisma.Decimal aqui)
+    if (typeof vehicleOdometerKm !== "undefined") {
+      await prisma.vehicle.update({
+        where: { id: vehicleId },
+        data: {
+          odometerKm:
+            vehicleOdometerKm === null ? null : Number(vehicleOdometerKm),
+        },
+      });
+    }
+
+    // Criação da despesa
     const createdExpense = await prisma.expense.create({
       data: {
         userId: session.user.id,

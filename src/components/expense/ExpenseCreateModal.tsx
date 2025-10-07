@@ -31,10 +31,18 @@ const types = [
 ] as const;
 const fuelTypes = ["GASOLINA", "ETANOL", "DIESEL", "GNV"] as const;
 
-// permite dígitos e vírgula; remove qualquer coisa diferente
+/** Km com vírgula para o Trip (permite 352,5) */
 function maskKmComma(v: string) {
   return v.replace(/[^\d,]/g, "");
 }
+/** Km total do veículo: apenas dígitos inteiros */
+function maskKmInt(v: string) {
+  return v.replace(/\D/g, "");
+}
+
+/** Tipos de erro 422 */
+type ValidationIssue = { path: string; message: string };
+type ValidationPayload = { message: string; issues?: ValidationIssue[] };
 
 export function ExpenseCreateModal({ open, onClose }: Props) {
   const router = useRouter();
@@ -43,15 +51,18 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   const { showToast } = useToast();
   const reminders = useReminders();
 
+  // form
   const [vehicleId, setVehicleId] = useState("");
   const [type, setType] = useState<(typeof types)[number]>("ABASTECIMENTO");
   const [status, setStatus] = useState<"PAGO" | "PENDENTE">("PENDENTE");
-  const [date, setDate] = useState<string>(() =>
+  const [dateISO, setDateISO] = useState<string>(() =>
     new Date().toISOString().slice(0, 10)
   );
   const [amountMasked, setAmountMasked] = useState("");
   const [description, setDescription] = useState("");
-  const [km, setKm] = useState(""); // agora aceita vírgula
+
+  const [kmTrip, setKmTrip] = useState(""); // Trip (opcional)
+  const [vehicleOdometerKm, setVehicleOdometerKm] = useState(""); // OBRIGATÓRIO
 
   const [fuelLitersMasked, setFuelLitersMasked] = useState("");
   const [pricePerLiterMasked, setPricePerLiterMasked] = useState("");
@@ -59,6 +70,9 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   const [station, setStation] = useState("");
 
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
+
+  // Erros por campo
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const [askReminder, setAskReminder] = useState(false);
   const [openReminder, setOpenReminder] = useState(false);
@@ -68,8 +82,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
 
   useEffect(() => {
     if (vehicles.length && !vehicleId) setVehicleId(vehicles[0].id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vehicles]);
+  }, [vehicles, vehicleId]);
 
   useEffect(() => {
     if (!isAbastecimento) return;
@@ -83,42 +96,58 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
     }
   }, [amountMasked, fuelLitersMasked, isAbastecimento]);
 
+  function mapIssues(payload?: ValidationPayload) {
+    const out: Record<string, string> = {};
+    let first: string | null = null;
+    if (payload?.issues) {
+      for (const i of payload.issues) {
+        const k = i.path || "general";
+        if (!out[k]) {
+          out[k] = i.message;
+          if (!first) first = k;
+        }
+      }
+    }
+    return { out, first };
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setFormErrors({});
 
     try {
-      // km: aceita vírgula mas converte para inteiro (schema espera Int)
-      // ex.: "352,54" -> 352 (arredonda)
+      // kmTrip (aceita vírgula -> inteiro)
       const kmNumber =
-        km.trim() === ""
-          ? null
-          : Math.round(
-              Number(
-                km
-                  .replace(/\./g, "") // se alguém colar com ponto
-                  .replace(",", ".")
-              )
-            );
+        kmTrip.trim() === ""
+          ? undefined
+          : Math.round(Number(kmTrip.replace(/\./g, "").replace(",", ".")));
 
       const payload: any = {
         vehicleId,
         type,
         status,
-        date,
-        amount: unmaskCurrencyBRL(amountMasked),
+        dateISO, // <— chave do schema
+        amount: String(unmaskCurrencyBRL(amountMasked)),
         description,
-        km: kmNumber,
+        km: typeof kmNumber === "number" ? String(kmNumber) : undefined,
+        vehicleOdometerKm: vehicleOdometerKm
+          ? String(Number(vehicleOdometerKm))
+          : undefined,
       };
 
       if (isAbastecimento) {
         payload.fuelLiters = fuelLitersMasked
-          ? Number(fuelLitersMasked.replace(/\./g, "").replace(",", "."))
-          : null;
+          ? String(
+              Number(fuelLitersMasked.replace(/\./g, "").replace(",", "."))
+            )
+          : undefined;
         payload.pricePerLiter = pricePerLiterMasked
-          ? Number(pricePerLiterMasked.replace(/\./g, "").replace(",", "."))
-          : null;
-        payload.fuelType = fuelType || null;
-        payload.station = station || null;
+          ? String(
+              Number(pricePerLiterMasked.replace(/\./g, "").replace(",", "."))
+            )
+          : undefined;
+        payload.fuelType = fuelType || undefined;
+        payload.station = station || undefined;
       }
 
       if (attachments.length) {
@@ -133,11 +162,9 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
       emitAppEvent("gt:expenses:changed");
       showToast("Despesa criada com sucesso!", "success");
 
-      // recarrega hook e força “fresh data”
       await reload().catch(() => {});
       router.refresh();
 
-      // Perguntar lembrete se for manutenção
       if (type === "MANUTENCAO") {
         setPrefillReminder({
           vehicleId,
@@ -150,17 +177,24 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         onClose();
       }
 
-      // limpa form
+      // reset
       setAmountMasked("");
       setDescription("");
-      setKm("");
+      setKmTrip("");
+      setVehicleOdometerKm("");
       setFuelLitersMasked("");
       setPricePerLiterMasked("");
       setFuelType("");
       setStation("");
       setAttachments([]);
     } catch (err: any) {
-      showToast(err.message || "Erro ao criar despesa.", "error");
+      const payload: ValidationPayload | undefined = err?.payload;
+      if (err?.status === 422 && payload?.issues) {
+        const { out } = mapIssues(payload);
+        setFormErrors(out);
+      } else {
+        showToast(err?.message || "Erro ao criar despesa.", "error");
+      }
     }
   }
 
@@ -170,19 +204,19 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
       fuelLitersMasked.replace(/\./g, "").replace(",", ".")
     );
     const kmNum =
-      km.trim() === "" ? NaN : Number(km.replace(/\./g, "").replace(",", ".")); // aqui pode ser decimal
+      kmTrip.trim() === ""
+        ? NaN
+        : Number(kmTrip.replace(/\./g, "").replace(",", "."));
     if (!liters || !kmNum || Number.isNaN(kmNum)) return "";
     return `Consumo: ${(kmNum / liters).toFixed(2)} km/L`;
-  }, [isAbastecimento, fuelLitersMasked, km]);
+  }, [isAbastecimento, fuelLitersMasked, kmTrip]);
 
   // A11y
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef as any, open);
   useEffect(() => {
     if (!open) return;
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
+    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
   }, [open, onClose]);
@@ -218,13 +252,21 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
             </div>
           </div>
 
-          <form className="grid gap-3 p-4 pt-3" onSubmit={handleSubmit}>
+          <form
+            className="grid gap-3 p-4 pt-3"
+            onSubmit={handleSubmit}
+            noValidate
+          >
             <div>
               <label className="block text-sm mb-1">Veículo</label>
               <select
                 value={vehicleId}
                 onChange={(e) => setVehicleId(e.target.value)}
                 className="w-full px-3 py-2"
+                aria-invalid={!!formErrors.vehicleId}
+                aria-describedby={
+                  formErrors.vehicleId ? "err-vehicleId" : undefined
+                }
               >
                 {vehicles.map((v) => (
                   <option key={v.id} value={v.id}>
@@ -232,6 +274,11 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                   </option>
                 ))}
               </select>
+              {formErrors.vehicleId && (
+                <p id="err-vehicleId" className="mt-1 text-sm text-red-400">
+                  {formErrors.vehicleId}
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -241,6 +288,8 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                   value={type}
                   onChange={(e) => setType(e.target.value as any)}
                   className="w-full px-3 py-2"
+                  aria-invalid={!!formErrors.type}
+                  aria-describedby={formErrors.type ? "err-type" : undefined}
                 >
                   {types.map((t) => (
                     <option key={t} value={t}>
@@ -248,6 +297,11 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                     </option>
                   ))}
                 </select>
+                {formErrors.type && (
+                  <p id="err-type" className="mt-1 text-sm text-red-400">
+                    {formErrors.type}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm mb-1">Status</label>
@@ -267,10 +321,19 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                 <label className="block text-sm mb-1">Data</label>
                 <input
                   type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  value={dateISO}
+                  onChange={(e) => setDateISO(e.target.value)}
                   className="w-full px-3 py-2"
+                  aria-invalid={!!formErrors.dateISO}
+                  aria-describedby={
+                    formErrors.dateISO ? "err-dateISO" : undefined
+                  }
                 />
+                {formErrors.dateISO && (
+                  <p id="err-dateISO" className="mt-1 text-sm text-red-400">
+                    {formErrors.dateISO}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm mb-1">Valor</label>
@@ -282,7 +345,16 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                   }
                   placeholder="R$ 0,00"
                   className="w-full px-3 py-2"
+                  aria-invalid={!!formErrors.amount}
+                  aria-describedby={
+                    formErrors.amount ? "err-amount" : undefined
+                  }
                 />
+                {formErrors.amount && (
+                  <p id="err-amount" className="mt-1 text-sm text-red-400">
+                    {formErrors.amount}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -293,18 +365,58 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Ex.: Troca de óleo"
                 className="w-full px-3 py-2"
+                aria-invalid={!!formErrors.description}
+                aria-describedby={
+                  formErrors.description ? "err-description" : undefined
+                }
               />
+              {formErrors.description && (
+                <p id="err-description" className="mt-1 text-sm text-red-400">
+                  {formErrors.description}
+                </p>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm mb-1">Hodômetro (km)</label>
-              <input
-                inputMode="numeric"
-                value={km}
-                onChange={(e) => setKm(maskKmComma(e.target.value))}
-                className="w-full px-3 py-2"
-                placeholder="Ex.: 80010 ou 352,4"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm mb-1">Hodômetro (km)</label>
+                <input
+                  inputMode="numeric"
+                  value={kmTrip}
+                  onChange={(e) => setKmTrip(maskKmComma(e.target.value))}
+                  className="w-full px-3 py-2"
+                  placeholder="Ex.: 80010 ou 352,4"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm mb-1">
+                  Km total do veículo
+                </label>
+                <input
+                  inputMode="numeric"
+                  value={vehicleOdometerKm}
+                  onChange={(e) =>
+                    setVehicleOdometerKm(maskKmInt(e.target.value))
+                  }
+                  className="w-full px-3 py-2"
+                  placeholder="Ex.: 105980"
+                  aria-invalid={!!formErrors.vehicleOdometerKm}
+                  aria-describedby={
+                    formErrors.vehicleOdometerKm
+                      ? "err-vehicleOdometerKm"
+                      : undefined
+                  }
+                />
+                {formErrors.vehicleOdometerKm && (
+                  <p
+                    id="err-vehicleOdometerKm"
+                    className="mt-1 text-sm text-red-400"
+                  >
+                    {formErrors.vehicleOdometerKm}
+                  </p>
+                )}
+              </div>
             </div>
 
             {isAbastecimento && (
@@ -320,7 +432,19 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                       }
                       placeholder="0,00"
                       className="w-full px-3 py-2"
+                      aria-invalid={!!formErrors.fuelLiters}
+                      aria-describedby={
+                        formErrors.fuelLiters ? "err-fuelLiters" : undefined
+                      }
                     />
+                    {formErrors.fuelLiters && (
+                      <p
+                        id="err-fuelLiters"
+                        className="mt-1 text-sm text-red-400"
+                      >
+                        {formErrors.fuelLiters}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm mb-1">Preço/L</label>
@@ -334,7 +458,21 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                       }
                       placeholder="0,00"
                       className="w-full px-3 py-2"
+                      aria-invalid={!!formErrors.pricePerLiter}
+                      aria-describedby={
+                        formErrors.pricePerLiter
+                          ? "err-pricePerLiter"
+                          : undefined
+                      }
                     />
+                    {formErrors.pricePerLiter && (
+                      <p
+                        id="err-pricePerLiter"
+                        className="mt-1 text-sm text-red-400"
+                      >
+                        {formErrors.pricePerLiter}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -345,6 +483,10 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                       value={fuelType}
                       onChange={(e) => setFuelType(e.target.value)}
                       className="w-full px-3 py-2"
+                      aria-invalid={!!formErrors.fuelType}
+                      aria-describedby={
+                        formErrors.fuelType ? "err-fuelType" : undefined
+                      }
                     >
                       <option value="">Selecione</option>
                       {fuelTypes.map((f) => (
@@ -353,6 +495,14 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                         </option>
                       ))}
                     </select>
+                    {formErrors.fuelType && (
+                      <p
+                        id="err-fuelType"
+                        className="mt-1 text-sm text-red-400"
+                      >
+                        {formErrors.fuelType}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -428,9 +578,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         onSubmit={async (payload) => {
           try {
             await reminders.createRule(payload);
-          } catch {
-            /* silencioso */
-          }
+          } catch {}
         }}
       />
     </>
