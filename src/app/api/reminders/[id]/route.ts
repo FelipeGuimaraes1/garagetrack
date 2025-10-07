@@ -36,9 +36,58 @@ export async function PATCH(request: Request, context: RouteParams) {
       );
     }
 
-    const requestBody = await request.json();
+    const body = await request.json();
+
+    // --- AÇÃO: markDone ------------------------------------------------------
+    if (body?.action === "markDone") {
+      // currentOdometer é opcional (pode vir undefined); doneAt idem
+      const currentOdometer =
+        typeof body.currentOdometer === "number" &&
+        !Number.isNaN(body.currentOdometer)
+          ? Math.max(0, Math.trunc(body.currentOdometer))
+          : null;
+
+      const doneAt: Date =
+        typeof body.doneAt === "string" && body.doneAt
+          ? parseDateOnlyToUTC(body.doneAt) // "YYYY-MM-DD"
+          : new Date(); // hoje
+
+      const updated = await prisma.reminderRule.update({
+        where: { id: reminderId },
+        data: {
+          lastDoneKm: currentOdometer,
+          lastDoneAt: doneAt,
+        },
+      });
+
+      return NextResponse.json({ data: updated }, { status: 200 });
+    }
+
+    // --- AÇÃO: snooze --------------------------------------------------------
+    if (body?.action === "snooze") {
+      const days = Number(body.days);
+      if (!Number.isFinite(days) || days <= 0) {
+        return NextResponse.json(
+          { error: "Parâmetro 'days' inválido." },
+          { status: 400 }
+        );
+      }
+
+      const base = existing.dueDate ?? new Date();
+      const next = new Date(base);
+      next.setDate(next.getDate() + Math.trunc(days));
+
+      const updated = await prisma.reminderRule.update({
+        where: { id: reminderId },
+        data: { dueDate: next },
+      });
+
+      return NextResponse.json({ data: updated }, { status: 200 });
+    }
+
+    // --- UPDATE padrão validado pelo Zod ------------------------------------
     const validationResult = ReminderUpdateSchema.safeParse({
-      ...requestBody,
+      ...body,
       id: reminderId,
     });
     if (!validationResult.success) {
@@ -55,7 +104,6 @@ export async function PATCH(request: Request, context: RouteParams) {
     delete dataToUpdate.id;
 
     const prismaData: any = {};
-
     if (typeof dataToUpdate.vehicleId !== "undefined")
       prismaData.vehicleId = dataToUpdate.vehicleId;
     if (typeof dataToUpdate.type !== "undefined")

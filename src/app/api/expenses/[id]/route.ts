@@ -57,6 +57,19 @@ export async function PATCH(request: Request, context: RouteParams) {
     const dataToUpdate = { ...validationResult.data } as any;
     delete dataToUpdate.id;
 
+    // Se vier "vehicleOdometerKm", atualiza o odômetro do veículo
+    if (typeof dataToUpdate.vehicleOdometerKm !== "undefined") {
+      await prisma.vehicle.update({
+        where: { id: dataToUpdate.vehicleId ?? existing.vehicleId },
+        data: {
+          odometerKm:
+            dataToUpdate.vehicleOdometerKm === null
+              ? null
+              : Number(dataToUpdate.vehicleOdometerKm),
+        },
+      });
+    }
+
     const prismaData: any = {};
 
     if (typeof dataToUpdate.vehicleId !== "undefined")
@@ -72,15 +85,22 @@ export async function PATCH(request: Request, context: RouteParams) {
     if (typeof dataToUpdate.description !== "undefined")
       prismaData.description = dataToUpdate.description;
     if (typeof dataToUpdate.km !== "undefined")
-      prismaData.km = new Prisma.Decimal(dataToUpdate.km);
+      prismaData.km =
+        dataToUpdate.km == null ? null : new Prisma.Decimal(dataToUpdate.km);
     if (typeof dataToUpdate.fuelLiters !== "undefined")
-      prismaData.fuelLiters = new Prisma.Decimal(dataToUpdate.fuelLiters);
+      prismaData.fuelLiters =
+        dataToUpdate.fuelLiters == null
+          ? null
+          : new Prisma.Decimal(dataToUpdate.fuelLiters);
     if (typeof dataToUpdate.pricePerLiter !== "undefined")
-      prismaData.pricePerLiter = new Prisma.Decimal(dataToUpdate.pricePerLiter);
+      prismaData.pricePerLiter =
+        dataToUpdate.pricePerLiter == null
+          ? null
+          : new Prisma.Decimal(dataToUpdate.pricePerLiter);
     if (typeof dataToUpdate.fuelType !== "undefined")
-      prismaData.fuelType = dataToUpdate.fuelType;
+      prismaData.fuelType = dataToUpdate.fuelType ?? null;
     if (typeof dataToUpdate.station !== "undefined")
-      prismaData.station = dataToUpdate.station;
+      prismaData.station = dataToUpdate.station ?? null;
 
     const updatedExpense = await prisma.expense.update({
       where: { id: expenseId },

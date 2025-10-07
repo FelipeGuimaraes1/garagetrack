@@ -109,6 +109,7 @@ export function useExpenses(initialFilters: ExpenseFilters = { page: 1 }) {
     void load();
   }, []); // primeira carga
 
+  /** Agora retorna { expense, alerts } para que a UI possa mostrar o aviso */
   const createExpense = useCallback(async (input: CreateInput) => {
     const res = await fetch("/api/expenses", {
       method: "POST",
@@ -127,7 +128,7 @@ export function useExpenses(initialFilters: ExpenseFilters = { page: 1 }) {
 
     const created: Expense = json?.data ?? json;
     setExpenses((prev) => [created, ...prev]);
-    return created;
+    return { expense: created, alerts: (json?.alerts as any[]) ?? [] };
   }, []);
 
   const updateExpense = useCallback(async (id: string, input: UpdateInput) => {

@@ -30,6 +30,15 @@ const types = [
 ] as const;
 const fuelTypes = ["GASOLINA", "ETANOL", "DIESEL", "GNV"] as const;
 
+/** Km Trip com vírgula (ex.: 352,5) */
+function maskKmComma(v: string) {
+  return v.replace(/[^\d,]/g, "");
+}
+/** Km total do veículo — inteiro */
+function maskKmInt(v: string) {
+  return v.replace(/\D/g, "");
+}
+
 export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
   const { expenses, updateExpense } = useExpenses();
   const { vehicles } = useVehicles();
@@ -42,12 +51,12 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
   const [vehicleId, setVehicleId] = useState("");
   const [type, setType] = useState<(typeof types)[number]>("ABASTECIMENTO");
   const [status, setStatus] = useState<"PAGO" | "PENDENTE">("PENDENTE");
-  const [date, setDate] = useState<string>("");
+  const [dateISO, setDateISO] = useState<string>(""); // <- ISO (YYYY-MM-DD)
   const [amountMasked, setAmountMasked] = useState("");
   const [description, setDescription] = useState("");
 
-  const [kmTrip, setKmTrip] = useState("");
-  const [vehicleOdometerKm, setVehicleOdometerKm] = useState("");
+  const [kmTrip, setKmTrip] = useState(""); // aceita vírgula
+  const [vehicleOdometerKm, setVehicleOdometerKm] = useState(""); // inteiro
 
   const [fuelLitersMasked, setFuelLitersMasked] = useState("");
   const [pricePerLiterMasked, setPricePerLiterMasked] = useState("");
@@ -61,10 +70,10 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
       setVehicleId(current.vehicleId);
       setType(current.type as any);
       setStatus(current.status as any);
-      setDate(new Date(current.date).toISOString().slice(0, 10));
+      setDateISO(new Date(current.date).toISOString().slice(0, 10));
       setAmountMasked(maskCurrencyBRL(String(current.amount)));
       setDescription(current.description);
-      setKmTrip(current.km != null ? String(current.km) : "");
+      setKmTrip(current.km != null ? String(current.km).replace(".", ",") : "");
       setFuelLitersMasked(
         current.fuelLiters != null
           ? String(current.fuelLiters).replace(".", ",")
@@ -77,6 +86,8 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
       );
       setFuelType(current.fuelType ?? "");
       setStation(current.station ?? "");
+      // vehicleOdometerKm não vem da despesa — o usuário pode informar novo valor ao editar
+      setVehicleOdometerKm("");
     }
   }, [current]);
 
@@ -85,28 +96,38 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
     if (!expenseId) return;
 
     try {
+      // kmTrip: vírgula -> número, arredonda
+      const kmNumber =
+        kmTrip.trim() === ""
+          ? undefined
+          : Math.round(Number(kmTrip.replace(/\./g, "").replace(",", ".")));
+
       const payload: any = {
         vehicleId,
         type,
         status,
-        date,
-        amount: unmaskCurrencyBRL(amountMasked),
+        dateISO, // <- chave esperada pelo Zod/rota
+        amount: String(unmaskCurrencyBRL(amountMasked)),
         description,
-        km: kmTrip ? Number(kmTrip) : null,
+        km: typeof kmNumber === "number" ? String(kmNumber) : undefined,
         vehicleOdometerKm: vehicleOdometerKm
-          ? Number(vehicleOdometerKm)
+          ? String(Number(vehicleOdometerKm))
           : undefined,
       };
 
       if (isAbastecimento) {
         payload.fuelLiters = fuelLitersMasked
-          ? Number(fuelLitersMasked.replace(/\./g, "").replace(",", "."))
-          : null;
+          ? String(
+              Number(fuelLitersMasked.replace(/\./g, "").replace(",", "."))
+            )
+          : undefined;
         payload.pricePerLiter = pricePerLiterMasked
-          ? Number(pricePerLiterMasked.replace(/\./g, "").replace(",", "."))
-          : null;
-        payload.fuelType = fuelType || null;
-        payload.station = station || null;
+          ? String(
+              Number(pricePerLiterMasked.replace(/\./g, "").replace(",", "."))
+            )
+          : undefined;
+        payload.fuelType = fuelType || undefined;
+        payload.station = station || undefined;
       } else {
         payload.fuelLiters = null;
         payload.pricePerLiter = null;
@@ -216,8 +237,8 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
               <label className="block text-sm mb-1">Data</label>
               <input
                 type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+                value={dateISO}
+                onChange={(e) => setDateISO(e.target.value)}
                 className="w-full px-3 py-2"
               />
             </div>
@@ -249,9 +270,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
               <input
                 inputMode="numeric"
                 value={kmTrip}
-                onChange={(e) =>
-                  setKmTrip(e.target.value.replace(/[^\d,]/g, ""))
-                }
+                onChange={(e) => setKmTrip(maskKmComma(e.target.value))}
                 className="w-full px-3 py-2"
                 placeholder="Ex.: 80010 ou 352,4"
               />
@@ -263,7 +282,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
                 inputMode="numeric"
                 value={vehicleOdometerKm}
                 onChange={(e) =>
-                  setVehicleOdometerKm(e.target.value.replace(/\D/g, ""))
+                  setVehicleOdometerKm(maskKmInt(e.target.value))
                 }
                 className="w-full px-3 py-2"
                 placeholder="Ex.: 105980"

@@ -78,6 +78,17 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   const [openReminder, setOpenReminder] = useState(false);
   const [prefillReminder, setPrefillReminder] = useState<any | null>(null);
 
+  // Avisos de lembretes por km detectados após salvar
+  const [kmAlerts, setKmAlerts] = useState<
+    {
+      id: string;
+      title: string;
+      status: "DUE_SOON" | "OVERDUE";
+      message: string;
+    }[]
+  >([]);
+  const [openKmAlerts, setOpenKmAlerts] = useState(false);
+
   const isAbastecimento = useMemo(() => type === "ABASTECIMENTO", [type]);
 
   useEffect(() => {
@@ -158,14 +169,20 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         }));
       }
 
-      await createExpense(payload);
+      const { alerts } = await createExpense(payload);
       emitAppEvent("gt:expenses:changed");
       showToast("Despesa criada com sucesso!", "success");
 
+      // recarrega hook e força “fresh data”
       await reload().catch(() => {});
       router.refresh();
 
-      if (type === "MANUTENCAO") {
+      // Se gerar alertas de manutenção por KM, mostra modal
+      if (Array.isArray(alerts) && alerts.length > 0) {
+        setKmAlerts(alerts);
+        setOpenKmAlerts(true);
+      } else if (type === "MANUTENCAO") {
+        // senão, pergunta sobre criar lembrete
         setPrefillReminder({
           vehicleId,
           type: "SERVICE",
@@ -222,6 +239,13 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   }, [open, onClose]);
 
   if (!open) return null;
+
+  const alertsDescription =
+    kmAlerts.length === 1
+      ? `Há 1 manutenção por km ${
+          kmAlerts[0].status === "OVERDUE" ? "vencida" : "chegando"
+        }: "${kmAlerts[0].title}" (${kmAlerts[0].message}).`
+      : `Foram detectadas ${kmAlerts.length} manutenções por km (entre vencidas e chegando). Você pode conferir na aba de Lembretes.`;
 
   return (
     <>
@@ -551,7 +575,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         </div>
       </div>
 
-      {/* Pergunta lembrete (apenas após MANUTENCAO) */}
+      {/* Pergunta lembrete (apenas após MANUTENCAO, se não houver alertas) */}
       <ConfirmDialog
         open={askReminder}
         title="Adicionar lembrete?"
@@ -568,6 +592,29 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         }}
       />
 
+      {/* Avisos de manutenções por KM vencidas/chegando */}
+      <ConfirmDialog
+        open={openKmAlerts}
+        title="Atenção com as manutenções"
+        description={
+          kmAlerts.length === 1
+            ? `Há 1 manutenção por km ${
+                kmAlerts[0].status === "OVERDUE" ? "vencida" : "chegando"
+              }: "${kmAlerts[0].title}" (${kmAlerts[0].message}).`
+            : `Foram detectadas ${kmAlerts.length} manutenções por km (entre vencidas e chegando). Você pode conferir na aba de Lembretes.`
+        }
+        confirmText="Ver lembretes"
+        cancelText="Ok"
+        onCancel={() => {
+          setOpenKmAlerts(false);
+          onClose();
+        }}
+        onConfirm={() => {
+          setOpenKmAlerts(false);
+          router.push("/reminders");
+        }}
+      />
+
       <ReminderRuleForm
         open={openReminder}
         onClose={() => {
@@ -578,7 +625,9 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         onSubmit={async (payload) => {
           try {
             await reminders.createRule(payload);
-          } catch {}
+          } catch {
+            /* silencioso */
+          }
         }}
       />
     </>

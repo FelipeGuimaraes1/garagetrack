@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { authOptions } from "@/lib/auth/auth";
 import { prisma } from "@/lib/utils/db";
+import { computeKmStatusForRule } from "@/lib/utils/reminders";
 import { buildValidationError } from "@/lib/validations/errors";
 import { ExpenseCreateSchema } from "@/lib/validations/expense";
 import { Prisma } from "@prisma/client";
@@ -70,7 +71,6 @@ export async function GET(request: Request) {
 
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
-    // Padrão de resposta mais completo e estável
     return NextResponse.json(
       {
         items: expenses,
@@ -125,24 +125,21 @@ export async function POST(request: Request) {
       fuelType,
       station,
       attachments,
-      // novo campo obrigatório no form (quilometragem total do veículo)
-      vehicleOdometerKm,
+      vehicleOdometerKm, // obrigatório no form
     } = validationResult.data;
 
-    // Atualiza o hodômetro total do veículo (Vehicle.odometerKm é Int?)
-    // - Use apenas where por id (chave única)
-    // - Use number (nada de Prisma.Decimal aqui)
+    // 1) Atualiza odômetro total do veículo (Int?) – usa number
+    let newOdometerNumber: number | null = null;
     if (typeof vehicleOdometerKm !== "undefined") {
+      newOdometerNumber =
+        vehicleOdometerKm === null ? null : Number(vehicleOdometerKm);
       await prisma.vehicle.update({
         where: { id: vehicleId },
-        data: {
-          odometerKm:
-            vehicleOdometerKm === null ? null : Number(vehicleOdometerKm),
-        },
+        data: { odometerKm: newOdometerNumber },
       });
     }
 
-    // Criação da despesa
+    // 2) Cria a despesa
     const createdExpense = await prisma.expense.create({
       data: {
         userId: session.user.id,
@@ -181,8 +178,58 @@ export async function POST(request: Request) {
       },
     });
 
-    // Padrão consistente com GET (mas em created fica prático devolver em "data")
-    return NextResponse.json({ data: createdExpense }, { status: 201 });
+    // 3) Avalia lembretes por KM para este veículo
+    const alerts: Array<{
+      id: string;
+      title: string;
+      status: "DUE_SOON" | "OVERDUE";
+      message: string;
+    }> = [];
+
+    if (newOdometerNumber != null) {
+      const rules = await prisma.reminderRule.findMany({
+        where: {
+          userId: session.user.id,
+          vehicleId,
+          isActive: true,
+          NOT: { everyKm: null },
+        },
+        select: {
+          id: true,
+          title: true,
+          everyKm: true,
+          lastDoneKm: true,
+          warnKmLeft: true,
+        },
+      });
+
+      for (const r of rules) {
+        const { status: st, left } = computeKmStatusForRule({
+          everyKm: r.everyKm as number,
+          lastDoneKm: r.lastDoneKm ?? 0,
+          warnKmLeft: (r.warnKmLeft as number) ?? 500,
+          currentOdo: newOdometerNumber,
+        });
+
+        if (st === "OVERDUE") {
+          alerts.push({
+            id: r.id,
+            title: r.title,
+            status: "OVERDUE",
+            message: `Venceu por ${Math.abs(left)} km`,
+          });
+        } else if (st === "DUE_SOON") {
+          alerts.push({
+            id: r.id,
+            title: r.title,
+            status: "DUE_SOON",
+            message: `Faltam ${left} km`,
+          });
+        }
+      }
+    }
+
+    return NextResponse.json({ data: createdExpense, alerts }, { status: 201 });
   } catch {
     return NextResponse.json(
       { message: "Erro ao criar despesa." },
