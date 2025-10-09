@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
 import { emitAppEvent } from "@/lib/utils/events";
 import {
+  formatCurrencyBRL,
   maskCurrencyBRL,
   maskLiters2,
   maskPricePerLiter2,
@@ -71,7 +72,10 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
       setType(current.type as any);
       setStatus(current.status as any);
       setDateISO(new Date(current.date).toISOString().slice(0, 10));
-      setAmountMasked(maskCurrencyBRL(String(current.amount)));
+
+      // IMPORTANTE: valor vindo da API está em reais (ex.: 120) -> formatador sem dividir por 100
+      setAmountMasked(formatCurrencyBRL(current.amount));
+
       setDescription(current.description);
       setKmTrip(current.km != null ? String(current.km).replace(".", ",") : "");
       setFuelLitersMasked(

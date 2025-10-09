@@ -1,4 +1,4 @@
-/** Máscara de moeda BRL com 2 casas (ex.: "1234" -> "R$ 12,34") */
+/** Máscara de moeda BRL com 2 casas (ex.: "1234" -> "R$ 12,34") — USO: durante a digitação */
 export function maskCurrencyBRL(raw: string): string {
   const digits = raw.replace(/\D/g, "");
   const number = Number(digits) / 100;
@@ -6,6 +6,19 @@ export function maskCurrencyBRL(raw: string): string {
     style: "currency",
     currency: "BRL",
   }).format(number);
+}
+
+/** Formata um número já em reais para BRL (ex.: 12.34 -> "R$ 12,34") — USO: para exibir valor vindo da API/DB */
+export function formatCurrencyBRL(value: number | string): string {
+  const n =
+    typeof value === "string"
+      ? Number(value.replace(/\./g, "").replace(",", "."))
+      : Number(value);
+  if (!Number.isFinite(n)) return "R$ 0,00";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(n);
 }
 
 /** Remove formatação BRL e retorna número (ex.: "R$ 12,34" -> 12.34) */

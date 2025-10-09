@@ -13,9 +13,13 @@ function parseDateOnlyToUTC(dateISO: string): Date {
   return new Date(Date.UTC(y, m - 1, d));
 }
 
-type RouteParams = { params: { id: string } };
+/**
+ * Next 15+: nas rotas dinâmicas de API, `params` é assíncrono,
+ * então tipamos como Promise e usamos `await`.
+ */
+type RouteParams = { params: Promise<{ id: string }> };
 
-export async function PATCH(request: Request, context: RouteParams) {
+export async function PATCH(request: Request, ctx: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -25,7 +29,8 @@ export async function PATCH(request: Request, context: RouteParams) {
       );
     }
 
-    const reminderId = context.params.id;
+    const { id: reminderId } = await ctx.params;
+
     const existing = await prisma.reminderRule.findFirst({
       where: { id: reminderId, userId: session.user.id },
     });
@@ -40,7 +45,6 @@ export async function PATCH(request: Request, context: RouteParams) {
 
     // --- AÇÃO: markDone ------------------------------------------------------
     if (body?.action === "markDone") {
-      // currentOdometer é opcional (pode vir undefined); doneAt idem
       const currentOdometer =
         typeof body.currentOdometer === "number" &&
         !Number.isNaN(body.currentOdometer)
@@ -49,8 +53,8 @@ export async function PATCH(request: Request, context: RouteParams) {
 
       const doneAt: Date =
         typeof body.doneAt === "string" && body.doneAt
-          ? parseDateOnlyToUTC(body.doneAt) // "YYYY-MM-DD"
-          : new Date(); // hoje
+          ? parseDateOnlyToUTC(body.doneAt)
+          : new Date();
 
       const updated = await prisma.reminderRule.update({
         where: { id: reminderId },
@@ -147,7 +151,7 @@ export async function PATCH(request: Request, context: RouteParams) {
   }
 }
 
-export async function DELETE(_request: Request, context: RouteParams) {
+export async function DELETE(_request: Request, ctx: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -157,7 +161,8 @@ export async function DELETE(_request: Request, context: RouteParams) {
       );
     }
 
-    const reminderId = context.params.id;
+    const { id: reminderId } = await ctx.params;
+
     const existing = await prisma.reminderRule.findFirst({
       where: { id: reminderId, userId: session.user.id },
     });

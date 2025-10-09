@@ -204,9 +204,14 @@ export async function POST(request: Request) {
       });
 
       for (const r of rules) {
+        // ⚠️ Se o lembrete ainda não tem baseline (lastDoneKm == null),
+        // usamos o odômetro atual como referência inicial para NÃO acusar vencido.
+        const baseline =
+          r.lastDoneKm == null ? newOdometerNumber : r.lastDoneKm;
+
         const { status: st, left } = computeKmStatusForRule({
           everyKm: r.everyKm as number,
-          lastDoneKm: r.lastDoneKm ?? 0,
+          lastDoneKm: baseline ?? 0,
           warnKmLeft: (r.warnKmLeft as number) ?? 500,
           currentOdo: newOdometerNumber,
         });

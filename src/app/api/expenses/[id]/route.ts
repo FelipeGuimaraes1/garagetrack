@@ -14,9 +14,13 @@ function parseDateOnlyToUTC(dateISO: string): Date {
   return new Date(Date.UTC(y, m - 1, d));
 }
 
-type RouteParams = { params: { id: string } };
+/**
+ * Next 15+: nas rotas dinâmicas de API, `params` é assíncrono,
+ * então tipamos como Promise e usamos `await ctx.params`.
+ */
+type RouteParams = { params: Promise<{ id: string }> };
 
-export async function PATCH(request: Request, context: RouteParams) {
+export async function PATCH(request: Request, ctx: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -26,7 +30,8 @@ export async function PATCH(request: Request, context: RouteParams) {
       );
     }
 
-    const expenseId = context.params.id;
+    const { id: expenseId } = await ctx.params;
+
     const existing = await prisma.expense.findFirst({
       where: { id: expenseId, userId: session.user.id },
       include: { attachments: true },
@@ -117,7 +122,7 @@ export async function PATCH(request: Request, context: RouteParams) {
   }
 }
 
-export async function DELETE(_request: Request, context: RouteParams) {
+export async function DELETE(_request: Request, ctx: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -127,7 +132,8 @@ export async function DELETE(_request: Request, context: RouteParams) {
       );
     }
 
-    const expenseId = context.params.id;
+    const { id: expenseId } = await ctx.params;
+
     const existing = await prisma.expense.findFirst({
       where: { id: expenseId, userId: session.user.id },
     });

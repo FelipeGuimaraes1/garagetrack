@@ -1,14 +1,13 @@
 import { prisma } from "@/lib/utils/db";
-import { PrismaAdapter } from "@auth/prisma-adapter"; // <-- ADAPTER
+import { PrismaAdapter } from "@auth/prisma-adapter";
 import { compare } from "bcryptjs";
-import NextAuth, { type NextAuthOptions, getServerSession } from "next-auth";
+import { type NextAuthOptions, getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 
 export const authOptions: NextAuthOptions = {
-  // mantém JWT; o adapter persiste User/Account/Session/VerificationToken
   session: { strategy: "jwt" },
-  adapter: PrismaAdapter(prisma), // <-- LIGA O ADAPTER
+  adapter: PrismaAdapter(prisma),
 
   pages: { signIn: "/signin" },
 
@@ -16,8 +15,6 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.AUTH_GOOGLE_ID ?? "",
       clientSecret: process.env.AUTH_GOOGLE_SECRET ?? "",
-      // se você já tem usuário criado por credentials com o mesmo e-mail,
-      // isso permite vincular a conta Google ao mesmo user:
       allowDangerousEmailAccountLinking: true,
     }),
 
@@ -60,7 +57,7 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async session({ session, token }) {
       if (session.user && token.sub) {
-        (session.user as any).id = token.sub; // id disponível na sessão
+        (session.user as any).id = token.sub;
       }
       return session;
     },
@@ -70,6 +67,6 @@ export const authOptions: NextAuthOptions = {
 // helper p/ server components
 export const getSession = () => getServerSession(authOptions);
 
-// rota app/api/auth/[...nextauth]/route.ts
-const handler = NextAuth(authOptions);
-export { handler as GET, handler as POST };
+// ❌ REMOVIDO: não exporte handler aqui
+// const handler = NextAuth(authOptions);
+// export { handler as GET, handler as POST };
