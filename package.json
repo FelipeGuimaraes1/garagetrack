@@ -8,7 +8,8 @@
     "start": "next start",
     "db:seed": "prisma db seed",
     "postinstall": "prisma generate",
-    "vercel-build": "prisma migrate deploy && next build"
+    "vercel-build": "prisma migrate deploy && next build",
+    "icons": "node scripts/build-favicons.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -30,7 +31,9 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "prisma": "^6.16.2",
+    "sharp": "^0.34.4",
     "tailwindcss": "^4",
+    "to-ico": "^1.1.5",
     "tsx": "^4.20.6",
     "typescript": "^5"
   }
