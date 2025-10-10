@@ -93,6 +93,19 @@ export async function POST(request: Request) {
       isActive,
     } = validationResult.data;
 
+    // ⚠️ Blindagem: se a regra é por KM e lastDoneKm não foi informado,
+    // usa o odômetro atual do veículo como âncora (se houver).
+    let resolvedLastDoneKm: number | null = lastDoneKm ?? null;
+    if (resolvedLastDoneKm == null && everyKm && vehicleId) {
+      const v = await prisma.vehicle.findUnique({
+        where: { id: vehicleId },
+        select: { odometerKm: true },
+      });
+      if (typeof v?.odometerKm === "number") {
+        resolvedLastDoneKm = v.odometerKm;
+      }
+    }
+
     const createdReminder = await prisma.reminderRule.create({
       data: {
         userId: session.user.id,
@@ -102,12 +115,12 @@ export async function POST(request: Request) {
         notes: notes ?? null,
         everyKm: everyKm ?? null,
         everyDays: everyDays ?? null,
-        lastDoneKm: lastDoneKm ?? null,
+        lastDoneKm: resolvedLastDoneKm, // << usa âncora resolvida
         lastDoneAt: lastDoneAtISO ? parseDateOnlyToUTC(lastDoneAtISO) : null,
         dueDate: dueDateISO ? parseDateOnlyToUTC(dueDateISO) : null,
-        warnKmLeft: warnKmLeft ?? undefined, // tem default(500)
-        warnDaysLeft: warnDaysLeft ?? undefined, // tem default(15)
-        isActive: typeof isActive === "boolean" ? isActive : undefined, // default(true)
+        warnKmLeft: warnKmLeft ?? undefined,
+        warnDaysLeft: warnDaysLeft ?? undefined,
+        isActive: typeof isActive === "boolean" ? isActive : undefined,
       },
     });
 

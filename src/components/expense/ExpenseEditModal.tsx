@@ -73,7 +73,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
       setStatus(current.status as any);
       setDateISO(new Date(current.date).toISOString().slice(0, 10));
 
-      // IMPORTANTE: valor vindo da API está em reais (ex.: 120) -> formatador sem dividir por 100
+      // Valor vindo da API já está em reais (ex.: 120) -> formata sem dividir por 100
       setAmountMasked(formatCurrencyBRL(current.amount));
 
       setDescription(current.description);
@@ -106,12 +106,13 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
           ? undefined
           : Math.round(Number(kmTrip.replace(/\./g, "").replace(",", ".")));
 
+      // Monta payload só com o que o schema espera (evita 422 por null/typo)
       const payload: any = {
         vehicleId,
         type,
         status,
         dateISO, // <- chave esperada pelo Zod/rota
-        amount: String(unmaskCurrencyBRL(amountMasked)),
+        amount: String(unmaskCurrencyBRL(amountMasked)), // manda número em string (Decimal-friendly)
         description,
         km: typeof kmNumber === "number" ? String(kmNumber) : undefined,
         vehicleOdometerKm: vehicleOdometerKm
@@ -120,6 +121,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
       };
 
       if (isAbastecimento) {
+        // Só envia campos de abastecimento se for realmente abastecimento
         payload.fuelLiters = fuelLitersMasked
           ? String(
               Number(fuelLitersMasked.replace(/\./g, "").replace(",", "."))
@@ -132,12 +134,9 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
           : undefined;
         payload.fuelType = fuelType || undefined;
         payload.station = station || undefined;
-      } else {
-        payload.fuelLiters = null;
-        payload.pricePerLiter = null;
-        payload.fuelType = null;
-        payload.station = null;
       }
+      // ⚠️ Se NÃO for abastecimento, não envie campos de combustível como null.
+      // Alguns schemas não aceitam null; omitindo evita 422 e o backend não altera esses campos.
 
       await updateExpense(expenseId, payload);
       emitAppEvent("gt:expenses:changed");

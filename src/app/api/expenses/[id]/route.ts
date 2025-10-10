@@ -20,6 +20,11 @@ function parseDateOnlyToUTC(dateISO: string): Date {
  */
 type RouteParams = { params: Promise<{ id: string }> };
 
+// Helper para normalizar strings vazias -> undefined
+function undefIfEmpty<T = any>(v: T): T | undefined {
+  return typeof v === "string" && v.trim() === "" ? undefined : v;
+}
+
 export async function PATCH(request: Request, ctx: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
@@ -44,11 +49,51 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     }
 
     const requestBody = await request.json();
-    const validationResult = ExpenseUpdateSchema.safeParse({
-      ...requestBody,
-      id: expenseId,
-    });
 
+    // ---------------- Sanitização do payload ----------------
+    // - Remover keys que o schema não reconhece (ex.: vehicleOdometerKm)
+    // - Converter strings vazias para undefined (schema geralmente não aceita "")
+    // - Se tipo != ABASTECIMENTO, não enviar campos de combustível
+    const {
+      vehicleOdometerKm, // tratado fora do schema
+      vehicleId,
+      type,
+      status,
+      dateISO,
+      amount,
+      description,
+      km,
+      fuelLiters,
+      pricePerLiter,
+      fuelType,
+      station,
+    } = requestBody ?? {};
+
+    const sanitizedType = undefIfEmpty(type);
+    const isAbastecimento = sanitizedType === "ABASTECIMENTO";
+
+    const payloadForSchema: any = {
+      id: expenseId,
+      vehicleId: undefIfEmpty(vehicleId),
+      type: sanitizedType,
+      status: undefIfEmpty(status),
+      dateISO: undefIfEmpty(dateISO),
+      amount: undefIfEmpty(amount),
+      description: undefIfEmpty(description),
+      km: undefIfEmpty(km),
+      // Enviar campos de combustível apenas se for ABASTECIMENTO
+      ...(isAbastecimento
+        ? {
+            fuelLiters: undefIfEmpty(fuelLiters),
+            pricePerLiter: undefIfEmpty(pricePerLiter),
+            fuelType: undefIfEmpty(fuelType) ?? null, // pode aceitar null/undefined
+            station: undefIfEmpty(station) ?? null,
+          }
+        : {}),
+    };
+
+    // ---------------- Validação ----------------
+    const validationResult = ExpenseUpdateSchema.safeParse(payloadForSchema);
     if (!validationResult.success) {
       return NextResponse.json(
         buildValidationError(
@@ -62,19 +107,18 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     const dataToUpdate = { ...validationResult.data } as any;
     delete dataToUpdate.id;
 
-    // Se vier "vehicleOdometerKm", atualiza o odômetro do veículo
-    if (typeof dataToUpdate.vehicleOdometerKm !== "undefined") {
+    // ---------------- Atualiza odômetro do veículo (se vier) ----------------
+    if (typeof vehicleOdometerKm !== "undefined") {
       await prisma.vehicle.update({
         where: { id: dataToUpdate.vehicleId ?? existing.vehicleId },
         data: {
           odometerKm:
-            dataToUpdate.vehicleOdometerKm === null
-              ? null
-              : Number(dataToUpdate.vehicleOdometerKm),
+            vehicleOdometerKm === null ? null : Number(vehicleOdometerKm),
         },
       });
     }
 
+    // ---------------- Monta dados p/ Prisma ----------------
     const prismaData: any = {};
 
     if (typeof dataToUpdate.vehicleId !== "undefined")
@@ -89,23 +133,37 @@ export async function PATCH(request: Request, ctx: RouteParams) {
       prismaData.amount = new Prisma.Decimal(dataToUpdate.amount);
     if (typeof dataToUpdate.description !== "undefined")
       prismaData.description = dataToUpdate.description;
-    if (typeof dataToUpdate.km !== "undefined")
+
+    if (typeof dataToUpdate.km !== "undefined") {
       prismaData.km =
         dataToUpdate.km == null ? null : new Prisma.Decimal(dataToUpdate.km);
-    if (typeof dataToUpdate.fuelLiters !== "undefined")
-      prismaData.fuelLiters =
-        dataToUpdate.fuelLiters == null
-          ? null
-          : new Prisma.Decimal(dataToUpdate.fuelLiters);
-    if (typeof dataToUpdate.pricePerLiter !== "undefined")
-      prismaData.pricePerLiter =
-        dataToUpdate.pricePerLiter == null
-          ? null
-          : new Prisma.Decimal(dataToUpdate.pricePerLiter);
-    if (typeof dataToUpdate.fuelType !== "undefined")
-      prismaData.fuelType = dataToUpdate.fuelType ?? null;
-    if (typeof dataToUpdate.station !== "undefined")
-      prismaData.station = dataToUpdate.station ?? null;
+    }
+
+    if (isAbastecimento) {
+      if (typeof dataToUpdate.fuelLiters !== "undefined") {
+        prismaData.fuelLiters =
+          dataToUpdate.fuelLiters == null
+            ? null
+            : new Prisma.Decimal(dataToUpdate.fuelLiters);
+      }
+      if (typeof dataToUpdate.pricePerLiter !== "undefined") {
+        prismaData.pricePerLiter =
+          dataToUpdate.pricePerLiter == null
+            ? null
+            : new Prisma.Decimal(dataToUpdate.pricePerLiter);
+      }
+      if (typeof dataToUpdate.fuelType !== "undefined")
+        prismaData.fuelType = dataToUpdate.fuelType ?? null;
+      if (typeof dataToUpdate.station !== "undefined")
+        prismaData.station = dataToUpdate.station ?? null;
+    } else {
+      // Se usuário trocou o tipo para algo diferente de ABASTECIMENTO,
+      // limpa campos de combustível (mantém consistência)
+      prismaData.fuelLiters = null;
+      prismaData.pricePerLiter = null;
+      prismaData.fuelType = null;
+      prismaData.station = null;
+    }
 
     const updatedExpense = await prisma.expense.update({
       where: { id: expenseId },

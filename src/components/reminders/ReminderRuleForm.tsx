@@ -45,10 +45,20 @@ export function ReminderRuleForm({
   const [warnDaysLeft, setWarnDaysLeft] = useState<string>("15");
   const [isActive, setIsActive] = useState(true);
 
+  // 🔒 Pass-through de ancoragem (quando a regra é criada a partir de uma despesa)
+  // Esses campos NÃO têm UI aqui, mas se vierem no defaultValues, serão enviados.
+  const [ptLastDoneKm, setPtLastDoneKm] = useState<number | undefined>(
+    undefined
+  );
+  const [ptLastDoneAtISO, setPtLastDoneAtISO] = useState<string | undefined>(
+    undefined
+  );
+
   useEffect(() => {
     if (!defaultValues) return;
+
     setVehicleId(defaultValues.vehicleId ?? "");
-    setType(defaultValues.type ?? "OIL_CHANGE");
+    setType((defaultValues.type as (typeof TYPES)[number]) ?? "OIL_CHANGE");
     setTitle(defaultValues.title ?? "");
     setNotes(defaultValues.notes ?? "");
 
@@ -57,9 +67,18 @@ export function ReminderRuleForm({
     else if (defaultValues.everyDays) setMode("DIAS");
     else if (defaultValues.dueDateISO || defaultValues.dueDate) setMode("DATA");
 
-    setEveryKm(defaultValues.everyKm?.toString() ?? "");
-    setEveryDays(defaultValues.everyDays?.toString() ?? "");
-    // aceita dueDateISO (string) ou dueDate (Date) vindos de algum lugar
+    setEveryKm(
+      typeof defaultValues.everyKm === "number"
+        ? String(defaultValues.everyKm)
+        : defaultValues.everyKm?.toString() ?? ""
+    );
+    setEveryDays(
+      typeof defaultValues.everyDays === "number"
+        ? String(defaultValues.everyDays)
+        : defaultValues.everyDays?.toString() ?? ""
+    );
+
+    // aceita dueDateISO (string) ou dueDate (Date/string)
     if (typeof defaultValues.dueDateISO === "string") {
       setDueDate(defaultValues.dueDateISO);
     } else if (defaultValues.dueDate instanceof Date) {
@@ -70,9 +89,44 @@ export function ReminderRuleForm({
       setDueDate("");
     }
 
-    setWarnKmLeft(defaultValues.warnKmLeft?.toString() ?? "500");
-    setWarnDaysLeft(defaultValues.warnDaysLeft?.toString() ?? "15");
-    setIsActive(defaultValues.isActive ?? true);
+    setWarnKmLeft(
+      typeof defaultValues.warnKmLeft === "number"
+        ? String(defaultValues.warnKmLeft)
+        : defaultValues.warnKmLeft?.toString() ?? "500"
+    );
+    setWarnDaysLeft(
+      typeof defaultValues.warnDaysLeft === "number"
+        ? String(defaultValues.warnDaysLeft)
+        : defaultValues.warnDaysLeft?.toString() ?? "15"
+    );
+    setIsActive(
+      typeof defaultValues.isActive === "boolean"
+        ? defaultValues.isActive
+        : true
+    );
+
+    // ⛳ ancoragem: se vierem, guardamos para enviar no submit
+    if (typeof defaultValues.lastDoneKm === "number") {
+      setPtLastDoneKm(defaultValues.lastDoneKm);
+    } else if (
+      typeof defaultValues.lastDoneKm === "string" &&
+      defaultValues.lastDoneKm.trim() !== "" &&
+      !Number.isNaN(Number(defaultValues.lastDoneKm))
+    ) {
+      setPtLastDoneKm(Number(defaultValues.lastDoneKm));
+    } else {
+      setPtLastDoneKm(undefined);
+    }
+
+    if (typeof defaultValues.lastDoneAtISO === "string") {
+      setPtLastDoneAtISO(defaultValues.lastDoneAtISO);
+    } else if (defaultValues.lastDoneAt instanceof Date) {
+      setPtLastDoneAtISO(defaultValues.lastDoneAt.toISOString().slice(0, 10));
+    } else if (typeof defaultValues.lastDoneAt === "string") {
+      setPtLastDoneAtISO(defaultValues.lastDoneAt.slice(0, 10));
+    } else {
+      setPtLastDoneAtISO(undefined);
+    }
   }, [defaultValues]);
 
   function clearModeFields(next: Mode) {
@@ -100,7 +154,17 @@ export function ReminderRuleForm({
 
     if (mode === "KM" && everyKm) payload.everyKm = Number(everyKm);
     if (mode === "DIAS" && everyDays) payload.everyDays = Number(everyDays);
-    if (mode === "DATA" && dueDate) payload.dueDateISO = dueDate; // << chave certa para o schema
+    if (mode === "DATA" && dueDate) payload.dueDateISO = dueDate; // chave do schema
+
+    // ✅ Pass-through de ancoragem:
+    // se o form veio de uma despesa (defaultValues), mandamos a âncora para que
+    // os próximos cálculos (DUE_SOON/OVERDUE) partam do km/data corretos.
+    if (typeof ptLastDoneKm === "number") {
+      payload.lastDoneKm = ptLastDoneKm;
+    }
+    if (typeof ptLastDoneAtISO === "string" && ptLastDoneAtISO) {
+      payload.lastDoneAtISO = ptLastDoneAtISO;
+    }
 
     await onSubmit(payload);
     onClose();

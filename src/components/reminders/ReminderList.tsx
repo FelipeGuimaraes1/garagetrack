@@ -7,6 +7,7 @@ import { useVehicles } from "@/hooks/useVehicles";
 import { useMemo, useState } from "react";
 import { MarkDoneDialog } from "./MarkDoneDialog";
 import { ReminderRuleForm } from "./ReminderRuleForm";
+import { ReminderViewDialog } from "./ReminderViewDialog";
 import { SnoozeDialog } from "./SnoozeDialog";
 
 /**
@@ -18,26 +19,19 @@ type ReminderLike = {
   vehicleId: string | null;
   title: string;
   type: string;
-  status?: string;
+  /** 🔧 alinhar com o union usado no ReminderViewDialog */
+  status?: "OK" | "DUE_SOON" | "OVERDUE";
   message?: string;
-
-  // campos extras que a API já retorna e que usamos para “feito hoje”
-  lastDoneAt?: string | null;
-  lastDoneKm?: number | null;
+  notes?: string | null;
   everyKm?: number | null;
   everyDays?: number | null;
-  dueDate?: string | null;
+  lastDoneKm?: number | null;
+  lastDoneAt?: string | Date | null;
+  dueDate?: string | Date | null;
   warnKmLeft?: number | null;
   warnDaysLeft?: number | null;
-  notes?: string | null;
+  isActive?: boolean;
 };
-
-function isISODateToday(iso?: string | null) {
-  if (!iso) return false;
-  const d = new Date(iso);
-  const today = new Date();
-  return d.toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
-}
 
 export function ReminderList() {
   const {
@@ -56,20 +50,12 @@ export function ReminderList() {
   const { showToast } = useToast();
 
   const [openForm, setOpenForm] = useState(false);
-  const [editing, setEditing] = useState<any | null>(null);
+  const [editing, setEditing] = useState<ReminderLike | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [markId, setMarkId] = useState<string | null>(null);
   const [snoozeId, setSnoozeId] = useState<string | null>(null);
-
-  // novo: visualizar
   const [viewing, setViewing] = useState<ReminderLike | null>(null);
 
-  /**
-   * Normaliza o retorno do hook para um array:
-   * - Se já for array, usa diretamente.
-   * - Se vier como objeto paginado, tenta usar a propriedade "data".
-   * - Caso contrário, cai para array vazio para evitar crash.
-   */
   const remindersList: ReminderLike[] = useMemo(() => {
     if (Array.isArray(reminders)) return reminders as ReminderLike[];
     if (reminders && Array.isArray((reminders as any).data)) {
@@ -78,7 +64,7 @@ export function ReminderList() {
     return [];
   }, [reminders]);
 
-  function colorByStatus(status: string | undefined) {
+  function colorByStatus(status: ReminderLike["status"]) {
     if (status === "OVERDUE") return "border-[color:var(--danger)]/40";
     if (status === "DUE_SOON") return "border-[color:var(--warning)]/40";
     return "border-[var(--border)]";
@@ -104,14 +90,9 @@ export function ReminderList() {
         <div className="surface p-4 text-[var(--danger)]">{errorMessage}</div>
       )}
 
-      {/* Lista segura — sempre mapeia sobre array normalizado */}
       <ul className="grid gap-3">
         {remindersList.map((reminder) => {
-          const vehicle = vehicles.find(
-            (vehicleItem) => vehicleItem.id === reminder.vehicleId
-          );
-          const doneToday = isISODateToday(reminder.lastDoneAt);
-
+          const vehicle = vehicles.find((v) => v.id === reminder.vehicleId);
           return (
             <li
               key={reminder.id}
@@ -119,72 +100,44 @@ export function ReminderList() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="font-medium flex items-center gap-2">
-                    <span>{reminder.title}</span>
+                  <div className="font-medium">
+                    {reminder.title}
                     {vehicle ? (
-                      <span className="text-sm text-[var(--muted)]">
+                      <span className="text-sm text-[var(--muted)] ml-2">
                         · {vehicle.nickname || vehicle.plate}
                       </span>
                     ) : null}
-                    {doneToday && (
-                      <span
-                        className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full
-                                   bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
-                        title="Marcado como feito hoje"
-                      >
-                        <span aria-hidden>✅</span> Feito hoje
-                      </span>
-                    )}
                   </div>
                   <div className="text-sm text-[var(--muted)] mt-1">
                     {reminder.type}
                     {reminder.message ? ` · ${reminder.message}` : ""}
                   </div>
                 </div>
-
                 <div className="shrink-0 flex gap-2">
-                  {/* Visualizar */}
                   <button
                     className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
                     onClick={() => setViewing(reminder)}
                   >
                     Visualizar
                   </button>
-
                   <button
-                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
                     onClick={() => setMarkId(reminder.id)}
-                    disabled={doneToday}
-                    title={
-                      doneToday ? "Já foi marcado como feito hoje" : undefined
-                    }
                   >
                     Feito
                   </button>
                   <button
-                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
                     onClick={() => setSnoozeId(reminder.id)}
-                    disabled={doneToday}
-                    title={
-                      doneToday
-                        ? "Lembrete já marcado como feito hoje"
-                        : undefined
-                    }
                   >
                     Adiar
                   </button>
                   <button
-                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm"
                     onClick={() => {
                       setEditing(reminder);
                       setOpenForm(true);
                     }}
-                    disabled={doneToday}
-                    title={
-                      doneToday
-                        ? "Lembrete já marcado como feito hoje"
-                        : undefined
-                    }
                   >
                     Editar
                   </button>
@@ -220,6 +173,20 @@ export function ReminderList() {
             showToast(error?.message || "Falha ao salvar.", "error");
           }
         }}
+      />
+
+      <ReminderViewDialog
+        open={Boolean(viewing)}
+        onClose={() => setViewing(null)}
+        reminder={viewing ?? undefined}
+        vehicleLabel={
+          viewing
+            ? (() => {
+                const v = vehicles.find((vv) => vv.id === viewing.vehicleId);
+                return v ? v.nickname || v.plate || "" : "";
+              })()
+            : ""
+        }
       />
 
       <ConfirmDialog
@@ -278,100 +245,6 @@ export function ReminderList() {
           }
         }}
       />
-
-      {/* Modal de visualização */}
-      {viewing && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center modal-overlay p-4"
-          role="dialog"
-          aria-modal="true"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setViewing(null);
-          }}
-        >
-          <div className="modal-panel w-full max-w-md">
-            <div className="p-4 border-b border-[var(--border)] rounded-t-[1rem] bg-[var(--surface)] flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Detalhes do lembrete</h2>
-              <button
-                onClick={() => setViewing(null)}
-                className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
-              >
-                Fechar
-              </button>
-            </div>
-
-            <div className="p-4 grid gap-2 text-sm">
-              <div>
-                <span className="text-[var(--muted)]">Título:</span>{" "}
-                {viewing.title}
-              </div>
-              <div>
-                <span className="text-[var(--muted)]">Tipo:</span>{" "}
-                {viewing.type}
-              </div>
-              {viewing.message && (
-                <div>
-                  <span className="text-[var(--muted)]">Status:</span>{" "}
-                  {viewing.status} · {viewing.message}
-                </div>
-              )}
-              {viewing.notes && (
-                <div>
-                  <span className="text-[var(--muted)]">Observações:</span>{" "}
-                  {viewing.notes}
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <span className="text-[var(--muted)]">Cada X km:</span>{" "}
-                  {viewing.everyKm ?? "—"}
-                </div>
-                <div>
-                  <span className="text-[var(--muted)]">Cada X dias:</span>{" "}
-                  {viewing.everyDays ?? "—"}
-                </div>
-                <div>
-                  <span className="text-[var(--muted)]">
-                    Avisar quando faltar (km):
-                  </span>{" "}
-                  {viewing.warnKmLeft ?? "—"}
-                </div>
-                <div>
-                  <span className="text-[var(--muted)]">
-                    Avisar quando faltar (dias):
-                  </span>{" "}
-                  {viewing.warnDaysLeft ?? "—"}
-                </div>
-                <div>
-                  <span className="text-[var(--muted)]">Último feito em:</span>{" "}
-                  {viewing.lastDoneAt
-                    ? new Date(viewing.lastDoneAt).toLocaleDateString()
-                    : "—"}
-                </div>
-                <div>
-                  <span className="text-[var(--muted)]">Último km feito:</span>{" "}
-                  {viewing.lastDoneKm ?? "—"}
-                </div>
-                <div className="col-span-2">
-                  <span className="text-[var(--muted)]">Data limite:</span>{" "}
-                  {viewing.dueDate
-                    ? new Date(viewing.dueDate).toLocaleDateString()
-                    : "—"}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-[var(--border)] rounded-b-[1rem] bg-[var(--surface)] flex justify-end">
-              <button
-                onClick={() => setViewing(null)}
-                className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

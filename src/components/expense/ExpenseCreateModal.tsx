@@ -188,6 +188,12 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
           type: "SERVICE",
           title: "Próxima manutenção",
           notes: "",
+          // ancorar o lembrete na manutenção recém feita:
+          lastDoneKm: vehicleOdometerKm ? Number(vehicleOdometerKm) : undefined,
+          lastDoneAtISO: dateISO,
+          // bons defaults
+          warnKmLeft: 500,
+          isActive: true,
         });
         setAskReminder(true);
       } else {
@@ -625,8 +631,13 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         onSubmit={async (payload) => {
           try {
             await reminders.createRule(payload);
-          } catch {
-            /* silencioso */
+            showToast("Lembrete criado com sucesso!", "success");
+            // garante lista atualizada p/ badge/sidebar etc.
+            await reminders.reload().catch(() => {});
+            setOpenReminder(false);
+            onClose();
+          } catch (e: any) {
+            showToast(e?.message || "Falha ao criar lembrete.", "error");
           }
         }}
       />
