@@ -8,9 +8,13 @@ import { VehicleUpdateSchema } from "@/lib/validations/vehicle";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
-type RouteParams = { params: { id: string } };
+/**
+ * Next 15+: nas rotas dinâmicas de API, `params` é assíncrono,
+ * então tipamos como Promise e usamos `await` para obter o id.
+ */
+type RouteParams = { params: Promise<{ id: string }> };
 
-export async function PATCH(request: Request, context: RouteParams) {
+export async function PATCH(request: Request, ctx: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -20,7 +24,8 @@ export async function PATCH(request: Request, context: RouteParams) {
       );
     }
 
-    const vehicleId = context.params.id;
+    const { id: vehicleId } = await ctx.params;
+
     const existing = await prisma.vehicle.findFirst({
       where: { id: vehicleId, userId: session.user.id },
     });
@@ -96,7 +101,7 @@ export async function PATCH(request: Request, context: RouteParams) {
   }
 }
 
-export async function DELETE(_request: Request, context: RouteParams) {
+export async function DELETE(_request: Request, ctx: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -106,7 +111,8 @@ export async function DELETE(_request: Request, context: RouteParams) {
       );
     }
 
-    const vehicleId = context.params.id;
+    const { id: vehicleId } = await ctx.params;
+
     const existing = await prisma.vehicle.findFirst({
       where: { id: vehicleId, userId: session.user.id },
     });
