@@ -34,8 +34,10 @@ export default function OGImage() {
               height: 120,
               borderRadius: 28,
               background: "white",
-              display: "grid",
-              placeItems: "center",
+              // grid -> flex (compatível com next/og)
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               marginRight: 36,
             }}
           >
@@ -43,6 +45,7 @@ export default function OGImage() {
               GT
             </span>
           </div>
+
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 56, fontWeight: 800, lineHeight: 1.1 }}>
               GarageTrack
