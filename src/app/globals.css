@@ -215,3 +215,20 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.6),
     0 0 0 1px color-mix(in oklab, #fff 4%, transparent) inset;
 }
+
+/* ===== Altura real no iOS + Safe areas ===== */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  /* usa Dynamic Viewport Height para não sobrar “faixa azul” no iOS */
+  min-height: 100dvh;
+  padding-top: env(safe-area-inset-top, 0);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.app-shell {
+  min-height: 100dvh;
+}

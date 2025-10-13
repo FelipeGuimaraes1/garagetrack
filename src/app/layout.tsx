@@ -13,9 +13,7 @@ export const metadata: Metadata = {
   description:
     "Controle de veículos e despesas: abastecimentos, manutenções, lembretes e anexos.",
   applicationName: "GarageTrack",
-  // 🔗 Manifest (coloquei em public/site.webmanifest)
   manifest: "/site.webmanifest",
-  // 🔗 Ícones (mantém compatibilidade)
   icons: {
     icon: [{ url: "/favicon.svg?v=1", type: "image/svg+xml" }],
     apple: [{ url: "/apple-touch-icon.png?v=1" }],
@@ -28,12 +26,7 @@ export const metadata: Metadata = {
       "Gerencie veículos, despesas e lembretes de manutenção com anexos e odômetro.",
     url: "/",
     images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "GarageTrack",
-      },
+      { url: "/og-image.png", width: 1200, height: 630, alt: "GarageTrack" },
     ],
     locale: "pt_BR",
   },
@@ -44,18 +37,17 @@ export const metadata: Metadata = {
       "Gerencie veículos, despesas e lembretes de manutenção com anexos e odômetro.",
     images: ["/og-image.png"],
   },
-  // 👇 REMOVIDO DAQUI: themeColor (para acabar com o aviso)
 };
 
 export const viewport: Viewport = {
-  // Agora o themeColor fica aqui
+  // cor da barra do Safari (combina com seu fundo escuro)
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#0EA5E9" },
-    { media: "(prefers-color-scheme: dark)", color: "#0EA5E9" },
+    { media: "(prefers-color-scheme: light)", color: "#0b0f14" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0f14" },
   ],
   width: "device-width",
   initialScale: 1,
-  colorScheme: "dark", // você usa tema escuro por padrão
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -65,7 +57,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className="min-h-svh bg-[var(--background)] text-[var(--foreground)]">
+      {/* usamos 100dvh via CSS e safe-area paddings no globals.css */}
+      <body className="min-h-[100dvh] bg-[var(--background)] text-[var(--foreground)]">
         <AppProviders>{children}</AppProviders>
       </body>
     </html>
