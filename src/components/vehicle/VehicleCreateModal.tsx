@@ -9,9 +9,7 @@ import { useVehicles } from "@/hooks/useVehicles";
 import { emitAppEvent } from "@/lib/utils/events";
 import { maskOdometer, maskPlate } from "@/lib/utils/mask-br";
 
-/**
- * Tipagem do retorno de erro 422.
- */
+/** Tipagem do retorno de erro 422. */
 type ValidationIssue = { path: string; message: string };
 type ValidationErrorPayload = { message: string; issues?: ValidationIssue[] };
 
@@ -45,12 +43,14 @@ export function VehicleCreateModal({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     const handleEscapeKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") handleClose();
     };
     document.addEventListener("keydown", handleEscapeKey);
     return () => document.removeEventListener("keydown", handleEscapeKey);
-  }, [open, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
+  /** Mapeia erros 422 para o estado do formulário */
   function mapIssuesToFormErrors(payload: ValidationErrorPayload): {
     errors: Record<string, string>;
     firstErrorKey: string | null;
@@ -82,6 +82,27 @@ export function VehicleCreateModal({ open, onClose }: Props) {
     panelRef.current?.focus();
   }
 
+  /** RESET padrão ao fechar/cancelar */
+  function resetForm() {
+    setNickname("");
+    setPlate("");
+    setFuelDefault("");
+    setOdometerKm("");
+    setSubmitting(false);
+    setFormErrors({});
+  }
+
+  function handleClose() {
+    resetForm();
+    onClose();
+  }
+
+  // Se o modal fechar por fora, zerar também
+  useEffect(() => {
+    if (!open) resetForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (submitting) return;
@@ -102,14 +123,8 @@ export function VehicleCreateModal({ open, onClose }: Props) {
       router.refresh();
       showToast("Veículo criado com sucesso!", "success");
 
-      // Reset
-      setNickname("");
-      setPlate("");
-      setFuelDefault("");
-      setOdometerKm("");
-      onClose();
+      handleClose();
     } catch (unknownError: any) {
-      // Hook agora propaga { status, payload }
       const payload: ValidationErrorPayload | undefined = unknownError?.payload;
       if (unknownError?.status === 422 && payload?.issues) {
         const { errors, firstErrorKey } = mapIssuesToFormErrors(payload);
@@ -132,7 +147,7 @@ export function VehicleCreateModal({ open, onClose }: Props) {
       aria-modal="true"
       aria-labelledby="vehicle-create-title"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) handleClose();
       }}
     >
       <div
@@ -146,7 +161,7 @@ export function VehicleCreateModal({ open, onClose }: Props) {
               Novo veículo
             </h2>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5 cursor-pointer"
             >
               Fechar
@@ -251,7 +266,7 @@ export function VehicleCreateModal({ open, onClose }: Props) {
           <div className="pt-2 flex justify-end gap-2 sticky bottom-0 bg-[var(--surface)] border-t border-[var(--border)] mt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
               disabled={submitting}
             >

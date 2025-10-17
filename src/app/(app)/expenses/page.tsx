@@ -20,7 +20,14 @@ export default function ExpensesPage() {
         </button>
       </div>
 
-      <ExpenseFilters />
+      {/* Agora com cabeçalho + botão “Filtrar” visível só no mobile */}
+      <div className="sm:hidden flex items-center justify-end">
+        <ExpenseFilters variant="mobile" />
+      </div>
+      <div className="hidden sm:block">
+        <ExpenseFilters variant="desktop" />
+      </div>
+
       <ExpenseList />
 
       <ExpenseCreateModal open={isOpen} onClose={() => setIsOpen(false)} />

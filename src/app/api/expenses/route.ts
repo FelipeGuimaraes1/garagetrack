@@ -139,7 +139,15 @@ export async function POST(request: Request) {
       });
     }
 
-    // 2) Cria a despesa
+    // 2) Snapshot de KM salvo na própria despesa:
+    //    - se for MANUTENCAO e veio vehicleOdometerKm => salva no campo km (sem migration)
+    //    - senão, mantém a lógica anterior (km do formulário)
+    const kmToPersist =
+      type === "MANUTENCAO" && typeof vehicleOdometerKm !== "undefined"
+        ? vehicleOdometerKm
+        : km;
+
+    // 3) Cria a despesa
     const createdExpense = await prisma.expense.create({
       data: {
         userId: session.user.id,
@@ -149,7 +157,10 @@ export async function POST(request: Request) {
         date: parseDateOnlyToUTC(dateISO),
         amount: new Prisma.Decimal(amount),
         description,
-        km: typeof km !== "undefined" ? new Prisma.Decimal(km) : null,
+        km:
+          typeof kmToPersist !== "undefined"
+            ? new Prisma.Decimal(kmToPersist)
+            : null,
         fuelLiters:
           typeof fuelLiters !== "undefined"
             ? new Prisma.Decimal(fuelLiters)
@@ -178,7 +189,7 @@ export async function POST(request: Request) {
       },
     });
 
-    // 3) Avalia lembretes por KM para este veículo
+    // 4) Avalia lembretes por KM para este veículo
     const alerts: Array<{
       id: string;
       title: string;
@@ -204,8 +215,6 @@ export async function POST(request: Request) {
       });
 
       for (const r of rules) {
-        // ⚠️ Se o lembrete ainda não tem baseline (lastDoneKm == null),
-        // usamos o odômetro atual como referência inicial para NÃO acusar vencido.
         const baseline =
           r.lastDoneKm == null ? newOdometerNumber : r.lastDoneKm;
 

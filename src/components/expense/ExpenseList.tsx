@@ -11,16 +11,14 @@ import { ExpenseEditModal } from "./ExpenseEditModal";
 
 /**
  * Tipagem mínima necessária para renderização da lista de despesas.
- * Mantemos apenas os campos utilizados pelo componente para não acoplar
- * ao tipo gerado pelo Prisma ou a outras camadas.
  */
 type ExpenseLike = {
   id: string;
   type: string;
   date: string | Date;
   description: string;
-  amount: number | string; // pode vir como Decimal serializado
-  km?: number | string | null;
+  amount: number | string;
+  km?: number | string | null; // agora também guarda snapshot do odômetro em MANUTENCAO
   fuelLiters?: number | string | null;
   pricePerLiter?: number | string | null;
   fuelType?: string | null;
@@ -32,7 +30,6 @@ type ExpenseLike = {
   attachments?: Array<{ id: string; url: string }> | null;
 };
 
-/** Helpers para converter valores possivelmente string -> number sem NaN */
 function toNumber(value: unknown): number | null {
   if (value == null) return null;
   const n = Number(value as any);
@@ -54,19 +51,12 @@ export function ExpenseList() {
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Recarrega quando alguém emitir "gt:expenses:changed"
     const off = onAppEvent("gt:expenses:changed", () => {
       void reload();
     });
     return off;
   }, [reload]);
 
-  /**
-   * Normaliza o retorno do hook para um array fortemente tipado.
-   * - Se já for array, usa diretamente.
-   * - Se vier como objeto paginado { data: [...] }, usa .data.
-   * - Caso contrário, retorna [].
-   */
   const expensesList: ExpenseLike[] = useMemo(() => {
     if (Array.isArray(expenses)) return expenses as ExpenseLike[];
     if (expenses && Array.isArray((expenses as any).data)) {
@@ -104,6 +94,8 @@ export function ExpenseList() {
           const fuelLitersNumber = toNumber(expense.fuelLiters);
           const pricePerLiterNumber = toNumber(expense.pricePerLiter);
 
+          const isManutencao = expense.type === "MANUTENCAO";
+
           return (
             <li key={expense.id} className="surface p-4">
               <div className="flex items-start justify-between">
@@ -117,14 +109,23 @@ export function ExpenseList() {
 
                   <div className="text-sm text-[var(--muted)]">
                     {expense.description}
-                    {kmNumber != null ? ` · ${kmNumber} km` : ""}
+                    {/* Veículo */}
                     {expense.vehicle?.nickname || expense.vehicle?.plate
                       ? ` · ${
                           expense.vehicle.nickname || expense.vehicle.plate
                         }`
                       : ""}
+                    {/* KM:
+                        - ABASTECIMENTO: usa km como “trip” (comportamento antigo)
+                        - MANUTENCAO: mostra snapshot do odômetro salvo em km */}
+                    {kmNumber != null
+                      ? isManutencao
+                        ? ` · Odômetro: ${kmNumber} km`
+                        : ` · ${kmNumber} km`
+                      : ""}
                   </div>
 
+                  {/* Bloco extra p/ abastecimento (litros, R$/L, etc) */}
                   {expense.type === "ABASTECIMENTO" &&
                   (fuelLitersNumber != null || pricePerLiterNumber != null) ? (
                     <>
@@ -134,7 +135,7 @@ export function ExpenseList() {
                           : ""}{" "}
                         {pricePerLiterNumber != null
                           ? ` · ${formatCurrencyBRL(pricePerLiterNumber)}/L`
-                          : ""}
+                          : ""}{" "}
                         {expense.fuelType ? ` · ${expense.fuelType}` : ""}{" "}
                         {expense.station ? ` · ${expense.station}` : ""}
                       </div>

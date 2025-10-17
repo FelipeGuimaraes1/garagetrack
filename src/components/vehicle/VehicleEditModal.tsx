@@ -49,11 +49,12 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
   useEffect(() => {
     if (!open) return;
     const onEsc = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") handleClose();
     };
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
-  }, [open, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     setFormErrors({});
@@ -98,6 +99,23 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
     panelRef.current?.focus();
   }
 
+  /** RESET quando fecha/cancela */
+  function resetForm() {
+    setNickname("");
+    setPlate("");
+    setFuelDefault("");
+    setOdometerKm("");
+    setFormErrors({});
+  }
+  function handleClose() {
+    resetForm();
+    onClose();
+  }
+  useEffect(() => {
+    if (!open) resetForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!vehicleId) return;
@@ -114,7 +132,7 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
       emitAppEvent("gt:vehicles:changed");
       showToast("Veículo atualizado com sucesso!", "success");
       if (onSaved) await onSaved();
-      onClose();
+      handleClose();
     } catch (unknownError: any) {
       const payload: ValidationErrorPayload | undefined = unknownError?.payload;
       if (unknownError?.status === 422 && payload?.issues) {
@@ -139,7 +157,7 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
       aria-modal="true"
       aria-labelledby="vehicle-edit-title"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) handleClose();
       }}
     >
       <div
@@ -153,7 +171,7 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
               Editar veículo
             </h2>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
             >
               Fechar
@@ -204,7 +222,7 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
 
           {/* Combustível padrão */}
           <div>
-            <label className="block text-sm mb-1">Combustível padrão</label>
+            <label className="block text sm mb-1">Combustível padrão</label>
             <select
               ref={fuelDefaultSelectRef}
               value={fuelDefault}
@@ -256,7 +274,7 @@ export function VehicleEditModal({ vehicleId, open, onClose, onSaved }: Props) {
           <div className="pt-2 flex justify-end gap-2 sticky bottom-0 bg-[var(--surface)] border-t border-[var(--border)] mt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
             >
               Cancelar
