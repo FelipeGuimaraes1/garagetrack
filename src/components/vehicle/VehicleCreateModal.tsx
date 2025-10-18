@@ -26,6 +26,8 @@ export function VehicleCreateModal({ open, onClose }: Props) {
   const [plate, setPlate] = useState("");
   const [fuelDefault, setFuelDefault] = useState<string>("");
   const [odometerKm, setOdometerKm] = useState("");
+
+  // 🔒 Estado de envio: desabilita botões e mostra spinner
   const [submitting, setSubmitting] = useState(false);
 
   // Field errors
@@ -163,6 +165,7 @@ export function VehicleCreateModal({ open, onClose }: Props) {
             <button
               onClick={handleClose}
               className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5 cursor-pointer"
+              disabled={submitting} // 🔒 evita fechar durante envio
             >
               Fechar
             </button>
@@ -268,16 +271,44 @@ export function VehicleCreateModal({ open, onClose }: Props) {
               type="button"
               onClick={handleClose}
               className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
-              disabled={submitting}
+              disabled={submitting} // 🔒 evita ação durante envio
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="button-primary disabled:opacity-50"
+              className="button-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-busy={submitting}
             >
-              {submitting ? "Salvando..." : "Salvar"}
+              {submitting ? (
+                <span className="inline-flex items-center gap-2">
+                  <svg
+                    className="animate-spin h-5 w-5"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      opacity="0.25"
+                    />
+                    <path
+                      d="M22 12a10 10 0 0 1-10 10"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                  </svg>
+                  <span className="sr-only">Salvando…</span>
+                </span>
+              ) : (
+                "Salvar"
+              )}
             </button>
           </div>
         </form>

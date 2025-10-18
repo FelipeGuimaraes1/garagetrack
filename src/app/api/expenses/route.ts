@@ -128,15 +128,32 @@ export async function POST(request: Request) {
       vehicleOdometerKm, // obrigatório no form
     } = validationResult.data;
 
-    // 1) Atualiza odômetro total do veículo (Int?) – usa number
-    let newOdometerNumber: number | null = null;
-    if (typeof vehicleOdometerKm !== "undefined") {
-      newOdometerNumber =
-        vehicleOdometerKm === null ? null : Number(vehicleOdometerKm);
-      await prisma.vehicle.update({
-        where: { id: vehicleId },
-        data: { odometerKm: newOdometerNumber },
-      });
+    // 1) Atualiza odômetro total do veículo (apenas se aumentar) – usa number
+    //    - Nunca reduz nem zera o odômetro
+    //    - Vamos calcular um "hodômetro efetivo" para usar nos lembretes
+    const currentVehicle = await prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      select: { odometerKm: true },
+    });
+
+    const hasIncomingOdo =
+      typeof vehicleOdometerKm !== "undefined" && vehicleOdometerKm !== null;
+    const incomingOdo = hasIncomingOdo ? Number(vehicleOdometerKm) : null;
+    const currentOdo = currentVehicle?.odometerKm ?? null;
+
+    let effectiveOdometer: number | null = currentOdo;
+
+    if (hasIncomingOdo) {
+      if (currentOdo == null || (incomingOdo as number) > currentOdo) {
+        await prisma.vehicle.update({
+          where: { id: vehicleId },
+          data: { odometerKm: incomingOdo as number },
+        });
+        effectiveOdometer = incomingOdo as number;
+      } else {
+        // incoming menor/igual: manter atual, não atualizar
+        effectiveOdometer = currentOdo;
+      }
     }
 
     // 2) Snapshot de KM salvo na própria despesa:
@@ -197,7 +214,7 @@ export async function POST(request: Request) {
       message: string;
     }> = [];
 
-    if (newOdometerNumber != null) {
+    if (effectiveOdometer != null) {
       const rules = await prisma.reminderRule.findMany({
         where: {
           userId: session.user.id,
@@ -216,13 +233,13 @@ export async function POST(request: Request) {
 
       for (const r of rules) {
         const baseline =
-          r.lastDoneKm == null ? newOdometerNumber : r.lastDoneKm;
+          r.lastDoneKm == null ? effectiveOdometer : r.lastDoneKm;
 
         const { status: st, left } = computeKmStatusForRule({
           everyKm: r.everyKm as number,
           lastDoneKm: baseline ?? 0,
           warnKmLeft: (r.warnKmLeft as number) ?? 500,
-          currentOdo: newOdometerNumber,
+          currentOdo: effectiveOdometer,
         });
 
         if (st === "OVERDUE") {

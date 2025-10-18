@@ -91,6 +91,9 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
 
   const isAbastecimento = useMemo(() => type === "ABASTECIMENTO", [type]);
 
+  // 🔒 Estado de carregamento para desabilitar e mostrar spinner no botão
+  const [isSaving, setIsSaving] = useState(false);
+
   useEffect(() => {
     if (vehicles.length && !vehicleId) setVehicleId(vehicles[0].id);
   }, [vehicles, vehicleId]);
@@ -125,6 +128,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormErrors({});
+    setIsSaving(true); // ⏳ inicia loading
 
     try {
       // kmTrip (aceita vírgula -> inteiro)
@@ -132,6 +136,16 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         kmTrip.trim() === ""
           ? undefined
           : Math.round(Number(kmTrip.replace(/\./g, "").replace(",", ".")));
+
+      // Guard para não enviar vehicleOdometerKm menor que o atual do veículo
+      const currentVehicle = vehicles.find((v) => v.id === vehicleId);
+      const typedOdometer = vehicleOdometerKm
+        ? Number(vehicleOdometerKm)
+        : undefined;
+      const shouldOmitOdometer =
+        typedOdometer != null &&
+        currentVehicle?.odometerKm != null &&
+        typedOdometer < currentVehicle.odometerKm;
 
       const payload: any = {
         vehicleId,
@@ -141,8 +155,10 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
         amount: String(unmaskCurrencyBRL(amountMasked)),
         description,
         km: typeof kmNumber === "number" ? String(kmNumber) : undefined,
-        vehicleOdometerKm: vehicleOdometerKm
-          ? String(Number(vehicleOdometerKm))
+        vehicleOdometerKm: shouldOmitOdometer
+          ? undefined
+          : typedOdometer != null
+          ? String(typedOdometer)
           : undefined,
       };
 
@@ -213,6 +229,8 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
       } else {
         showToast(err?.message || "Erro ao criar despesa.", "error");
       }
+    } finally {
+      setIsSaving(false); // ✅ encerra loading (caso o modal permaneça aberto)
     }
   }
 
@@ -265,6 +283,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
               <button
                 onClick={onClose}
                 className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
+                disabled={isSaving} // 🔒 evita fechar durante o envio
               >
                 Fechar
               </button>
@@ -572,15 +591,46 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                 type="button"
                 onClick={onClose}
                 className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
+                disabled={isSaving} // 🔒 evita ação durante o envio
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 form="expense-create"
-                className="button-primary"
+                className="button-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isSaving} // 🔒 desabilita clique duplo
+                aria-busy={isSaving}
               >
-                Salvar
+                {isSaving ? (
+                  // ⏳ spinner acessível
+                  <span className="inline-flex items-center gap-2">
+                    <svg
+                      className="animate-spin h-5 w-5"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        opacity="0.25"
+                      />
+                      <path
+                        d="M22 12a10 10 0 0 1-10 10"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                    </svg>
+                    <span className="sr-only">Salvando…</span>
+                  </span>
+                ) : (
+                  "Salvar"
+                )}
               </button>
             </div>
           </div>

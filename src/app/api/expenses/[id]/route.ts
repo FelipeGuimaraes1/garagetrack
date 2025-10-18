@@ -107,15 +107,29 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     const dataToUpdate = { ...validationResult.data } as any;
     delete dataToUpdate.id;
 
-    // ---------------- Atualiza odômetro do veículo (se vier) ----------------
-    if (typeof vehicleOdometerKm !== "undefined") {
-      await prisma.vehicle.update({
-        where: { id: dataToUpdate.vehicleId ?? existing.vehicleId },
-        data: {
-          odometerKm:
-            vehicleOdometerKm === null ? null : Number(vehicleOdometerKm),
-        },
+    // ---------------- Atualiza odômetro do veículo (apenas se aumentar) ----------------
+    // Nunca reduz nem zera o odômetro.
+    if (
+      typeof vehicleOdometerKm !== "undefined" &&
+      vehicleOdometerKm !== null
+    ) {
+      const targetVehicleId = dataToUpdate.vehicleId ?? existing.vehicleId;
+
+      const currentVehicle = await prisma.vehicle.findUnique({
+        where: { id: targetVehicleId },
+        select: { odometerKm: true },
       });
+
+      const incomingOdo = Number(vehicleOdometerKm);
+      const currentOdo = currentVehicle?.odometerKm ?? null;
+
+      if (currentOdo == null || incomingOdo > currentOdo) {
+        await prisma.vehicle.update({
+          where: { id: targetVehicleId },
+          data: { odometerKm: incomingOdo },
+        });
+      }
+      // se menor/igual, ignora silenciosamente
     }
 
     // ---------------- Monta dados p/ Prisma ----------------
