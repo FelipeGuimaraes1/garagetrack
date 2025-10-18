@@ -232,3 +232,8 @@ body {
 .app-shell {
   min-height: 100dvh;
 }
+
+/* iOS momentum scroll dentro do modal */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+}

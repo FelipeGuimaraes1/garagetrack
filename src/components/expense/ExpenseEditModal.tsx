@@ -5,7 +5,13 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useToast } from "@/hooks/useToast";
 import { useVehicles } from "@/hooks/useVehicles";
 import { emitAppEvent } from "@/lib/utils/events";
-import { formatCurrencyBRL, unmaskCurrencyBRL } from "@/lib/utils/mask-br";
+import {
+  formatCurrencyBRL,
+  maskCurrencyBRL,
+  maskLiters2,
+  maskPricePerLiter2,
+  unmaskCurrencyBRL,
+} from "@/lib/utils/mask-br";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Props = {
@@ -59,55 +65,35 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
 
   const isAbastecimento = useMemo(() => type === "ABASTECIMENTO", [type]);
 
-  // preenche ao carregar a despesa
-  useEffect(() => {
-    if (current) {
-      setVehicleId(current.vehicleId);
-      setType(current.type as any);
-      setStatus(current.status as any);
-      setDateISO(new Date(current.date).toISOString().slice(0, 10));
-      setAmountMasked(formatCurrencyBRL(current.amount));
-      setDescription(current.description);
-      setKmTrip(current.km != null ? String(current.km).replace(".", ",") : "");
-      setFuelLitersMasked(
-        current.fuelLiters != null
-          ? String(current.fuelLiters).replace(".", ",")
-          : ""
-      );
-      setPricePerLiterMasked(
-        current.pricePerLiter != null
-          ? String(current.pricePerLiter).replace(".", ",")
-          : ""
-      );
-      setFuelType(current.fuelType ?? "");
-      setStation(current.station ?? "");
-      setVehicleOdometerKm("");
-    }
-  }, [current]);
-
-  // -------- RESET PADRÃO AO FECHAR --------
-  function resetForm() {
-    setVehicleId("");
-    setType("ABASTECIMENTO");
-    setStatus("PENDENTE");
-    setDateISO("");
-    setAmountMasked("");
-    setDescription("");
-    setKmTrip("");
+  function loadFromCurrent() {
+    if (!current) return;
+    setVehicleId(current.vehicleId);
+    setType(current.type as any);
+    setStatus(current.status as any);
+    setDateISO(new Date(current.date).toISOString().slice(0, 10));
+    setAmountMasked(formatCurrencyBRL(current.amount));
+    setDescription(current.description);
+    setKmTrip(current.km != null ? String(current.km).replace(".", ",") : "");
+    setFuelLitersMasked(
+      current.fuelLiters != null
+        ? String(current.fuelLiters).replace(".", ",")
+        : ""
+    );
+    setPricePerLiterMasked(
+      current.pricePerLiter != null
+        ? String(current.pricePerLiter).replace(".", ",")
+        : ""
+    );
+    setFuelType(current.fuelType ?? "");
+    setStation(current.station ?? "");
     setVehicleOdometerKm("");
-    setFuelLitersMasked("");
-    setPricePerLiterMasked("");
-    setFuelType("");
-    setStation("");
   }
-  function handleClose() {
-    resetForm();
-    onClose();
-  }
+
+  // carrega dados quando modal abre / troca de id
   useEffect(() => {
-    if (!open) resetForm();
+    if (open) loadFromCurrent();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, expenseId, current]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -151,7 +137,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
       emitAppEvent("gt:expenses:changed");
       showToast("Despesa atualizada com sucesso!", "success");
       if (onSaved) await onSaved();
-      handleClose();
+      onClose();
     } catch (err: any) {
       showToast(err.message || "Erro ao atualizar despesa.", "error");
     }
@@ -159,17 +145,13 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
 
   // A11y
   const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(
-    panelRef as unknown as React.RefObject<HTMLElement | null>,
-    open
-  );
+  useFocusTrap(panelRef as any, open);
   useEffect(() => {
     if (!open) return;
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && handleClose();
+    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, onClose]);
 
   if (!open || !current) return null;
 
@@ -180,20 +162,25 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
       aria-modal="true"
       aria-labelledby="expense-edit-title"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) handleClose();
+        if (e.target === e.currentTarget) onClose();
       }}
     >
+      {/* Painel flex + altura svh */}
       <div
         ref={panelRef}
-        className="modal-panel w-full max-w-lg max-h-[85dvh] overflow-y-auto"
+        className="modal-panel w-full max-w-lg h-[85svh] flex flex-col"
       >
-        <div className="p-4 sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
+        {/* Cabeçalho */}
+        <div className="p-4 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
           <div className="flex items-center justify-between">
             <h2 id="expense-edit-title" className="text-lg font-semibold">
               Editar despesa
             </h2>
             <button
-              onClick={handleClose}
+              onClick={() => {
+                loadFromCurrent();
+                onClose();
+              }}
               className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
             >
               Fechar
@@ -201,14 +188,171 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
           </div>
         </div>
 
-        <form className="grid gap-3 p-4 pt-3" onSubmit={handleSubmit}>
-          {/* (seu formulário permanece igual) */}
-          {/* ... */}
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
+          {/* Body rolável */}
+          <div className="flex-1 overflow-y-auto touch-scroll p-4 pt-3 space-y-3">
+            <div>
+              <label className="block text-sm mb-1">Veículo</label>
+              <select
+                value={vehicleId}
+                onChange={(e) => setVehicleId(e.target.value)}
+                className="w-full px-3 py-2"
+              >
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nickname || v.plate || "Sem apelido"}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="pt-2 flex justify-end gap-2 sticky bottom-0 bg-[var(--surface)] border-t border-[var(--border)] mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm mb-1">Tipo</label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as any)}
+                  className="w-full px-3 py-2"
+                >
+                  {types.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Status</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as any)}
+                  className="w-full px-3 py-2"
+                >
+                  <option value="PENDENTE">PENDENTE</option>
+                  <option value="PAGO">PAGO</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm mb-1">Data</label>
+                <input
+                  type="date"
+                  value={dateISO}
+                  onChange={(e) => setDateISO(e.target.value)}
+                  className="w-full px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Valor</label>
+                <input
+                  inputMode="numeric"
+                  value={amountMasked}
+                  onChange={(e) =>
+                    setAmountMasked(maskCurrencyBRL(e.target.value))
+                  }
+                  className="w-full px-3 py-2"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">Descrição</label>
+              <input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full px-3 py-2"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm mb-1">Hodômetro (km)</label>
+                <input
+                  inputMode="numeric"
+                  value={kmTrip}
+                  onChange={(e) => setKmTrip(maskKmComma(e.target.value))}
+                  className="w-full px-3 py-2"
+                  placeholder="Ex.: 80010 ou 352,4"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm mb-1">
+                  Km total do veículo
+                </label>
+                <input
+                  inputMode="numeric"
+                  value={vehicleOdometerKm}
+                  onChange={(e) =>
+                    setVehicleOdometerKm(maskKmInt(e.target.value))
+                  }
+                  className="w-full px-3 py-2"
+                  placeholder="Ex.: 105980"
+                />
+              </div>
+            </div>
+
+            {isAbastecimento && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm mb-1">Litros</label>
+                  <input
+                    inputMode="numeric"
+                    value={fuelLitersMasked}
+                    onChange={(e) =>
+                      setFuelLitersMasked(maskLiters2(e.target.value))
+                    }
+                    className="w-full px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">Preço/L</label>
+                  <input
+                    inputMode="numeric"
+                    value={pricePerLiterMasked}
+                    onChange={(e) =>
+                      setPricePerLiterMasked(maskPricePerLiter2(e.target.value))
+                    }
+                    className="w-full px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">Combustível</label>
+                  <select
+                    value={fuelType}
+                    onChange={(e) => setFuelType(e.target.value)}
+                    className="w-full px-3 py-2"
+                  >
+                    <option value="">Selecione</option>
+                    {fuelTypes.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">Posto</label>
+                  <input
+                    value={station}
+                    onChange={(e) => setStation(e.target.value)}
+                    className="w-full px-3 py-2"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Rodapé fixo */}
+          <div className="p-4 border-t border-[var(--border)] bg-[var(--surface)] rounded-b-[1rem] flex justify-end gap-2">
             <button
               type="button"
-              onClick={handleClose}
+              onClick={() => {
+                loadFromCurrent(); // volta aos dados originais
+                onClose();
+              }}
               className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
             >
               Cancelar
