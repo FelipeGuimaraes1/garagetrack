@@ -31,9 +31,11 @@ const types = [
 ] as const;
 const fuelTypes = ["GASOLINA", "ETANOL", "DIESEL", "GNV"] as const;
 
+/** Km Trip com vírgula (ex.: 352,5) */
 function maskKmComma(v: string) {
   return v.replace(/[^\d,]/g, "");
 }
+/** Km total do veículo — inteiro */
 function maskKmInt(v: string) {
   return v.replace(/\D/g, "");
 }
@@ -42,7 +44,6 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
   const { expenses, updateExpense } = useExpenses();
   const { vehicles } = useVehicles();
   const { showToast } = useToast();
-
   const current = useMemo(
     () => expenses.find((e) => e.id === expenseId),
     [expenses, expenseId]
@@ -65,35 +66,30 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
 
   const isAbastecimento = useMemo(() => type === "ABASTECIMENTO", [type]);
 
-  function loadFromCurrent() {
-    if (!current) return;
-    setVehicleId(current.vehicleId);
-    setType(current.type as any);
-    setStatus(current.status as any);
-    setDateISO(new Date(current.date).toISOString().slice(0, 10));
-    setAmountMasked(formatCurrencyBRL(current.amount));
-    setDescription(current.description);
-    setKmTrip(current.km != null ? String(current.km).replace(".", ",") : "");
-    setFuelLitersMasked(
-      current.fuelLiters != null
-        ? String(current.fuelLiters).replace(".", ",")
-        : ""
-    );
-    setPricePerLiterMasked(
-      current.pricePerLiter != null
-        ? String(current.pricePerLiter).replace(".", ",")
-        : ""
-    );
-    setFuelType(current.fuelType ?? "");
-    setStation(current.station ?? "");
-    setVehicleOdometerKm("");
-  }
-
-  // carrega dados quando modal abre / troca de id
   useEffect(() => {
-    if (open) loadFromCurrent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, expenseId, current]);
+    if (current) {
+      setVehicleId(current.vehicleId);
+      setType(current.type as any);
+      setStatus(current.status as any);
+      setDateISO(new Date(current.date).toISOString().slice(0, 10));
+      setAmountMasked(formatCurrencyBRL(current.amount));
+      setDescription(current.description);
+      setKmTrip(current.km != null ? String(current.km).replace(".", ",") : "");
+      setFuelLitersMasked(
+        current.fuelLiters != null
+          ? String(current.fuelLiters).replace(".", ",")
+          : ""
+      );
+      setPricePerLiterMasked(
+        current.pricePerLiter != null
+          ? String(current.pricePerLiter).replace(".", ",")
+          : ""
+      );
+      setFuelType(current.fuelType ?? "");
+      setStation(current.station ?? "");
+      setVehicleOdometerKm("");
+    }
+  }, [current]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -145,7 +141,10 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
 
   // A11y
   const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(panelRef as any, open);
+  useFocusTrap(
+    panelRef as unknown as React.RefObject<HTMLElement | null>,
+    open
+  );
   useEffect(() => {
     if (!open) return;
     const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -157,7 +156,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center modal-overlay p-4"
+      className="fixed inset-0 z-50 grid modal-overlay p-3 sm:p-4 items-start sm:place-items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="expense-edit-title"
@@ -165,22 +164,18 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Painel flex + altura svh */}
       <div
         ref={panelRef}
-        className="modal-panel w-full max-w-lg h-[85svh] flex flex-col"
+        className="modal-panel w-full max-w-lg h-[90svh] sm:h-auto sm:max-h-[85vh] flex flex-col"
       >
-        {/* Cabeçalho */}
-        <div className="p-4 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
+        {/* Header */}
+        <div className="p-4 shrink-0 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
           <div className="flex items-center justify-between">
             <h2 id="expense-edit-title" className="text-lg font-semibold">
               Editar despesa
             </h2>
             <button
-              onClick={() => {
-                loadFromCurrent();
-                onClose();
-              }}
+              onClick={onClose}
               className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
             >
               Fechar
@@ -188,9 +183,19 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
-          {/* Body rolável */}
-          <div className="flex-1 overflow-y-auto touch-scroll p-4 pt-3 space-y-3">
+        {/* Conteúdo rolável */}
+        <div
+          className="flex-1 overflow-y-auto px-4 pt-3 pb-28"
+          style={{
+            WebkitOverflowScrolling: "touch",
+            paddingBottom: `calc(7rem + env(safe-area-inset-bottom, 0px))`,
+          }}
+        >
+          <form
+            id="expense-edit"
+            className="grid gap-3"
+            onSubmit={handleSubmit}
+          >
             <div>
               <label className="block text-sm mb-1">Veículo</label>
               <select
@@ -343,25 +348,28 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
                 </div>
               </div>
             )}
-          </div>
+          </form>
+        </div>
 
-          {/* Rodapé fixo */}
-          <div className="p-4 border-t border-[var(--border)] bg-[var(--surface)] rounded-b-[1rem] flex justify-end gap-2">
+        {/* Footer */}
+        <div className="shrink-0 bg-[var(--surface)] border-t border-[var(--border)] px-4 py-3 rounded-b-[1rem]">
+          <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => {
-                loadFromCurrent(); // volta aos dados originais
-                onClose();
-              }}
+              onClick={onClose}
               className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
             >
               Cancelar
             </button>
-            <button type="submit" className="button-primary">
+            <button
+              type="submit"
+              form="expense-edit"
+              className="button-primary"
+            >
               Salvar
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

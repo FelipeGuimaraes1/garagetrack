@@ -40,6 +40,7 @@ function maskKmInt(v: string) {
   return v.replace(/\D/g, "");
 }
 
+/** Tipos de erro 422 */
 type ValidationIssue = { path: string; message: string };
 type ValidationPayload = { message: string; issues?: ValidationIssue[] };
 
@@ -60,8 +61,8 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   const [amountMasked, setAmountMasked] = useState("");
   const [description, setDescription] = useState("");
 
-  const [kmTrip, setKmTrip] = useState("");
-  const [vehicleOdometerKm, setVehicleOdometerKm] = useState("");
+  const [kmTrip, setKmTrip] = useState(""); // Trip (opcional)
+  const [vehicleOdometerKm, setVehicleOdometerKm] = useState(""); // OBRIGATÓRIO
 
   const [fuelLitersMasked, setFuelLitersMasked] = useState("");
   const [pricePerLiterMasked, setPricePerLiterMasked] = useState("");
@@ -77,6 +78,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   const [openReminder, setOpenReminder] = useState(false);
   const [prefillReminder, setPrefillReminder] = useState<any | null>(null);
 
+  // Avisos de lembretes por km detectados após salvar
   const [kmAlerts, setKmAlerts] = useState<
     {
       id: string;
@@ -89,12 +91,10 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
 
   const isAbastecimento = useMemo(() => type === "ABASTECIMENTO", [type]);
 
-  // seleciona veículo padrão
   useEffect(() => {
     if (vehicles.length && !vehicleId) setVehicleId(vehicles[0].id);
   }, [vehicles, vehicleId]);
 
-  // auto-calcula preço/L
   useEffect(() => {
     if (!isAbastecimento) return;
     const amount = unmaskCurrencyBRL(amountMasked);
@@ -122,39 +122,12 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
     return { out, first };
   }
 
-  function resetForm() {
-    setVehicleId(vehicles[0]?.id || "");
-    setType("ABASTECIMENTO");
-    setStatus("PENDENTE");
-    setDateISO(new Date().toISOString().slice(0, 10));
-    setAmountMasked("");
-    setDescription("");
-    setKmTrip("");
-    setVehicleOdometerKm("");
-    setFuelLitersMasked("");
-    setPricePerLiterMasked("");
-    setFuelType("");
-    setStation("");
-    setAttachments([]);
-    setFormErrors({});
-    setAskReminder(false);
-    setOpenReminder(false);
-    setPrefillReminder(null);
-    setKmAlerts([]);
-    setOpenKmAlerts(false);
-  }
-
-  // sempre que fechar, zera o formulário
-  useEffect(() => {
-    if (!open) resetForm();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormErrors({});
 
     try {
+      // kmTrip (aceita vírgula -> inteiro)
       const kmNumber =
         kmTrip.trim() === ""
           ? undefined
@@ -221,6 +194,17 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
       } else {
         onClose();
       }
+
+      // reset
+      setAmountMasked("");
+      setDescription("");
+      setKmTrip("");
+      setVehicleOdometerKm("");
+      setFuelLitersMasked("");
+      setPricePerLiterMasked("");
+      setFuelType("");
+      setStation("");
+      setAttachments([]);
     } catch (err: any) {
       const payload: ValidationPayload | undefined = err?.payload;
       if (err?.status === 422 && payload?.issues) {
@@ -260,7 +244,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   return (
     <>
       <div
-        className="fixed inset-0 z-50 grid place-items-center modal-overlay p-4"
+        className="fixed inset-0 z-50 grid modal-overlay p-3 sm:p-4 items-start sm:place-items-center"
         role="dialog"
         aria-modal="true"
         aria-labelledby="expense-create-title"
@@ -268,22 +252,18 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
           if (e.target === e.currentTarget) onClose();
         }}
       >
-        {/* Painel do modal: flex col + altura fixa (svh) */}
         <div
           ref={panelRef}
-          className="modal-panel w-full max-w-lg h-[85svh] flex flex-col"
+          className="modal-panel w-full max-w-lg h-[90svh] sm:h-auto sm:max-h-[85vh] flex flex-col"
         >
-          {/* Cabeçalho fixo */}
-          <div className="p-4 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
+          {/* Header (fixo) */}
+          <div className="p-4 shrink-0 bg-[var(--surface)] border-b border-[var(--border)] rounded-t-[1rem]">
             <div className="flex items-center justify-between">
               <h2 id="expense-create-title" className="text-lg font-semibold">
                 Nova despesa
               </h2>
               <button
-                onClick={() => {
-                  resetForm();
-                  onClose();
-                }}
+                onClick={onClose}
                 className="px-2 py-1 rounded-lg border border-[var(--border)] text-sm hover:ring-1 hover:ring-white/5"
               >
                 Fechar
@@ -291,14 +271,20 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
             </div>
           </div>
 
-          {/* Form como coluna: body rola, footer fica visível */}
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            className="flex-1 flex flex-col"
+          {/* Conteúdo rolável */}
+          <div
+            className="flex-1 overflow-y-auto px-4 pt-3 pb-28"
+            style={{
+              WebkitOverflowScrolling: "touch",
+              paddingBottom: `calc(7rem + env(safe-area-inset-bottom, 0px))`,
+            }}
           >
-            {/* Body rolável */}
-            <div className="flex-1 overflow-y-auto touch-scroll p-4 pt-3 space-y-3">
+            <form
+              id="expense-create"
+              onSubmit={handleSubmit}
+              noValidate
+              className="grid gap-3"
+            >
               <div>
                 <label className="block text-sm mb-1">Veículo</label>
                 <select
@@ -576,25 +562,28 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
                   </div>
                 ) : null}
               </div>
-            </div>
+            </form>
+          </div>
 
-            {/* Rodapé fixo dentro do modal */}
-            <div className="p-4 border-t border-[var(--border)] bg-[var(--surface)] rounded-b-[1rem] flex justify-end gap-2">
+          {/* Footer (fixo) */}
+          <div className="shrink-0 bg-[var(--surface)] border-t border-[var(--border)] px-4 py-3 rounded-b-[1rem]">
+            <div className="flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  resetForm();
-                  onClose();
-                }}
+                onClick={onClose}
                 className="px-3 py-2 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5"
               >
                 Cancelar
               </button>
-              <button type="submit" className="button-primary">
+              <button
+                type="submit"
+                form="expense-create"
+                className="button-primary"
+              >
                 Salvar
               </button>
             </div>
-          </form>
+          </div>
         </div>
       </div>
 
