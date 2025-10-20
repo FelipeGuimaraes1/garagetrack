@@ -10,11 +10,23 @@ export function maskCurrencyBRL(raw: string): string {
 
 /** Formata um número já em reais para BRL (ex.: 12.34 -> "R$ 12,34") — USO: para exibir valor vindo da API/DB */
 export function formatCurrencyBRL(value: number | string): string {
-  const n =
-    typeof value === "string"
-      ? Number(value.replace(/\./g, "").replace(",", "."))
-      : Number(value);
-  if (!Number.isFinite(n)) return "R$ 0,00";
+  let n: number;
+
+  if (typeof value === "string") {
+    const s = value.trim();
+    // Se vier em pt-BR (com vírgula), normaliza "1.234,56" -> 1234.56
+    if (s.includes(",")) {
+      n = Number(s.replace(/\./g, "").replace(",", "."));
+    } else {
+      // Caso típico do backend/Decimal: "232.66" -> 232.66 (não remover o ponto!)
+      n = Number(s);
+    }
+  } else {
+    n = Number(value);
+  }
+
+  if (!Number.isFinite(n)) n = 0;
+
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
