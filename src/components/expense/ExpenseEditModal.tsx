@@ -40,6 +40,20 @@ function maskKmInt(v: string) {
   return v.replace(/\D/g, "");
 }
 
+/** Extrai YYYY-MM-DD de forma robusta (aceita Date ou string ISO). */
+function dateOnly(value: Date | string): string {
+  if (typeof value === "string") {
+    const m = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1]; // já vem no padrão
+    // fallback: new Date + local parts
+  }
+  const d = new Date(value);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
   const { expenses, updateExpense } = useExpenses();
   const { vehicles } = useVehicles();
@@ -74,7 +88,7 @@ export function ExpenseEditModal({ expenseId, open, onClose, onSaved }: Props) {
       setVehicleId(current.vehicleId);
       setType(current.type as any);
       setStatus(current.status as any);
-      setDateISO(new Date(current.date).toISOString().slice(0, 10));
+      setDateISO(dateOnly(current.date as any)); // ⬅️ evita UTC shift
       setAmountMasked(formatCurrencyBRL(current.amount));
       setDescription(current.description);
       setKmTrip(current.km != null ? String(current.km).replace(".", ",") : "");

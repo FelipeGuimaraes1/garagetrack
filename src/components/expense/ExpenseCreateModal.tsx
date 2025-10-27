@@ -44,6 +44,15 @@ function maskKmInt(v: string) {
 type ValidationIssue = { path: string; message: string };
 type ValidationPayload = { message: string; issues?: ValidationIssue[] };
 
+/** YYYY-MM-DD com fuso LOCAL (evita UTC “pular” o dia) */
+function todayLocalISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 export function ExpenseCreateModal({ open, onClose }: Props) {
   const router = useRouter();
   const { vehicles } = useVehicles();
@@ -55,9 +64,7 @@ export function ExpenseCreateModal({ open, onClose }: Props) {
   const [vehicleId, setVehicleId] = useState("");
   const [type, setType] = useState<(typeof types)[number]>("ABASTECIMENTO");
   const [status, setStatus] = useState<"PAGO" | "PENDENTE">("PENDENTE");
-  const [dateISO, setDateISO] = useState<string>(() =>
-    new Date().toISOString().slice(0, 10)
-  );
+  const [dateISO, setDateISO] = useState<string>(() => todayLocalISO()); // ⬅️ local
   const [amountMasked, setAmountMasked] = useState("");
   const [description, setDescription] = useState("");
 

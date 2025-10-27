@@ -55,44 +55,27 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     const dataToUpdate = { ...validationResult.data } as any;
     delete dataToUpdate.id;
 
-    // 🔒 Proteção: hodômetro nunca diminui e não é zerado por PATCH
-    const updateData: any = {
-      nickname:
-        typeof dataToUpdate.nickname !== "undefined"
-          ? dataToUpdate.nickname
-          : existing.nickname,
-      plate:
-        typeof dataToUpdate.plate !== "undefined"
-          ? dataToUpdate.plate
-          : existing.plate,
-      fuelDefault:
-        typeof dataToUpdate.fuelDefault !== "undefined"
-          ? dataToUpdate.fuelDefault
-          : existing.fuelDefault,
-    };
-
-    if (typeof dataToUpdate.odometerKm !== "undefined") {
-      const incoming = dataToUpdate.odometerKm;
-      const current = existing.odometerKm;
-
-      if (typeof incoming === "number") {
-        if (current == null || incoming > current) {
-          updateData.odometerKm = incoming; // sobe apenas se aumentar
-        } else {
-          // ignora silenciosamente tentativas de reduzir/igualar
-          updateData.odometerKm = current;
-        }
-      } else if (incoming === null) {
-        // não permitir zerar via PATCH; mantém o atual
-        updateData.odometerKm = current;
-      }
-    } else {
-      updateData.odometerKm = existing.odometerKm;
-    }
-
+    // ✅ Permite editar livremente o hodômetro na seção de Veículos (inclusive diminuir ou limpar)
     const updatedVehicle = await prisma.vehicle.update({
       where: { id: vehicleId },
-      data: updateData,
+      data: {
+        nickname:
+          typeof dataToUpdate.nickname !== "undefined"
+            ? dataToUpdate.nickname
+            : existing.nickname,
+        plate:
+          typeof dataToUpdate.plate !== "undefined"
+            ? dataToUpdate.plate
+            : existing.plate,
+        odometerKm:
+          typeof dataToUpdate.odometerKm !== "undefined"
+            ? dataToUpdate.odometerKm // <— aqui agora aceita menor/igual/maior e até null
+            : existing.odometerKm,
+        fuelDefault:
+          typeof dataToUpdate.fuelDefault !== "undefined"
+            ? dataToUpdate.fuelDefault
+            : existing.fuelDefault,
+      },
     });
 
     return NextResponse.json({ data: updatedVehicle }, { status: 200 });
