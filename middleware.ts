@@ -1,24 +1,36 @@
 import { withAuth } from "next-auth/middleware";
 
+function isPublicPath(pathname: string): boolean {
+  if (pathname === "/") return true;
+
+  const publicExact = new Set([
+    "/signin",
+    "/signup",
+    "/api/register",
+    "/favicon.ico",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/site.webmanifest",
+  ]);
+  if (publicExact.has(pathname)) return true;
+
+  const publicPrefixes = [
+    "/api/auth",
+    "/opengraph-image",
+    "/apple-touch-icon",
+  ];
+  if (publicPrefixes.some((prefix) => pathname.startsWith(prefix))) return true;
+
+  return /\.(ico|png|svg|jpg|jpeg|webp|txt|xml|webmanifest)$/i.test(pathname);
+}
+
 export default withAuth({
   pages: {
     signIn: "/signin",
   },
   callbacks: {
     authorized: ({ token, req }) => {
-      const { pathname } = req.nextUrl;
-
-      // rotas públicas
-      const publicPaths = [
-        "/",
-        "/signin",
-        "/signup",
-        "/api/auth",
-        "/favicon.ico",
-      ];
-      if (publicPaths.some((p) => pathname.startsWith(p))) return true;
-
-      // demais pedem token (usuário logado)
+      if (isPublicPath(req.nextUrl.pathname)) return true;
       return !!token;
     },
   },

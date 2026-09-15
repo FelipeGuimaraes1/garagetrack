@@ -1,6 +1,7 @@
 "use client";
 
 import { apiPost } from "@/lib/http";
+import { PasswordSchema } from "@/lib/validations/password";
 import { signIn } from "next-auth/react";
 import { FormEvent, useState } from "react";
 
@@ -15,6 +16,15 @@ export default function SignUpPage() {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+
+    const passwordCheck = PasswordSchema.safeParse(password);
+    if (!passwordCheck.success) {
+      setSubmitting(false);
+      setError(
+        passwordCheck.error.issues[0]?.message || "Senha inválida."
+      );
+      return;
+    }
 
     try {
       await apiPost("/api/register", { name, email, password });
@@ -63,9 +73,13 @@ export default function SignUpPage() {
             className="w-full px-3 py-2"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Crie uma senha"
+            placeholder="Mínimo 8 caracteres, com letra e número"
             autoComplete="new-password"
+            minLength={8}
           />
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Use pelo menos 8 caracteres, incluindo letra e número.
+          </p>
         </div>
 
         {error && <p className="text-[var(--danger)] text-sm">{error}</p>}

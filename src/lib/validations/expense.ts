@@ -3,10 +3,23 @@ import { z } from "zod";
 import { ISODateOnlySchema } from "./date";
 import { DecimalStringSchema } from "./decimal";
 
-const urlRegex = /^(https?:\/\/)([\w.-]+)(:[0-9]+)?(\/[\w\-./?%&=]*)?$/i;
+function isCloudinaryHttpsUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") return false;
+    if (parsed.hostname !== "res.cloudinary.com") return false;
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    if (!cloudName) return true;
+    return parsed.pathname.startsWith(`/${cloudName}/`);
+  } catch {
+    return false;
+  }
+}
 
 export const ExpenseAttachmentInputSchema = z.object({
-  url: z.string().regex(urlRegex, "A URL do anexo deve ser válida."),
+  url: z
+    .string()
+    .refine(isCloudinaryHttpsUrl, "O anexo deve ser uma URL HTTPS do Cloudinary."),
   contentType: z
     .string()
     .max(120, "O tipo de conteúdo deve ter no máximo 120 caracteres.")

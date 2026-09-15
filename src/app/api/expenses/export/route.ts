@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { authOptions } from "@/lib/auth/auth";
+import { parseExportLimit } from "@/lib/security/pagination";
 import { prisma } from "@/lib/utils/db";
 import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
   const dateToISO = searchParams.get("dateTo") ?? undefined;
 
   // Evita export gigantesca acidental — limite suave de segurança
-  const limit = Math.min(Number(searchParams.get("limit") ?? 10000), 100000);
+  const limit = parseExportLimit(searchParams.get("limit"));
 
   const where = {
     userId: session.user.id,

@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { authOptions } from "@/lib/auth/auth";
+import { findOwnedVehicle } from "@/lib/auth/owned-vehicle";
 import { prisma } from "@/lib/utils/db";
 import { buildValidationError } from "@/lib/validations/errors";
 import { ExpenseUpdateSchema } from "@/lib/validations/expense";
@@ -107,18 +108,25 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     const dataToUpdate = { ...validationResult.data } as any;
     delete dataToUpdate.id;
 
+    const targetVehicleId = dataToUpdate.vehicleId ?? existing.vehicleId;
+    const ownedVehicle = await findOwnedVehicle(
+      session.user.id,
+      targetVehicleId
+    );
+    if (!ownedVehicle) {
+      return NextResponse.json(
+        { message: "Veículo não encontrado." },
+        { status: 404 }
+      );
+    }
+
     // ---------------- Atualiza odômetro do veículo (apenas se aumentar) ----------------
     // Nunca reduz nem zera o odômetro.
     if (
       typeof vehicleOdometerKm !== "undefined" &&
       vehicleOdometerKm !== null
     ) {
-      const targetVehicleId = dataToUpdate.vehicleId ?? existing.vehicleId;
-
-      const currentVehicle = await prisma.vehicle.findUnique({
-        where: { id: targetVehicleId },
-        select: { odometerKm: true },
-      });
+      const currentVehicle = ownedVehicle;
 
       const incomingOdo = Number(vehicleOdometerKm);
       const currentOdo = currentVehicle?.odometerKm ?? null;

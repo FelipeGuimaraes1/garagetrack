@@ -2,6 +2,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { authOptions } from "@/lib/auth/auth";
+import { findOwnedVehicle } from "@/lib/auth/owned-vehicle";
+import { parsePageIndex, parsePageSize } from "@/lib/security/pagination";
 import { prisma } from "@/lib/utils/db";
 import { buildValidationError } from "@/lib/validations/errors";
 import { ReminderCreateSchema } from "@/lib/validations/reminder";
@@ -24,8 +26,8 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const pageIndex = Number(searchParams.get("pageIndex") ?? "0");
-    const pageSize = Number(searchParams.get("pageSize") ?? "10");
+    const pageIndex = parsePageIndex(searchParams.get("pageIndex"));
+    const pageSize = parsePageSize(searchParams.get("pageSize"));
     const vehicleId = searchParams.get("vehicleId") ?? undefined;
 
     const where = {
@@ -95,15 +97,20 @@ export async function POST(request: Request) {
 
     // ⚠️ Blindagem: se a regra é por KM e lastDoneKm não foi informado,
     // usa o odômetro atual do veículo como âncora (se houver).
-    let resolvedLastDoneKm: number | null = lastDoneKm ?? null;
-    if (resolvedLastDoneKm == null && everyKm && vehicleId) {
-      const v = await prisma.vehicle.findUnique({
-        where: { id: vehicleId },
-        select: { odometerKm: true },
-      });
-      if (typeof v?.odometerKm === "number") {
-        resolvedLastDoneKm = v.odometerKm;
+    let ownedVehicle = null;
+    if (vehicleId) {
+      ownedVehicle = await findOwnedVehicle(session.user.id, vehicleId);
+      if (!ownedVehicle) {
+        return NextResponse.json(
+          { message: "Veículo não encontrado." },
+          { status: 404 }
+        );
       }
+    }
+
+    let resolvedLastDoneKm: number | null = lastDoneKm ?? null;
+    if (resolvedLastDoneKm == null && everyKm && ownedVehicle?.odometerKm != null) {
+      resolvedLastDoneKm = ownedVehicle.odometerKm;
     }
 
     const createdReminder = await prisma.reminderRule.create({

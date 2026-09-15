@@ -2,6 +2,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { authOptions } from "@/lib/auth/auth";
+import { findOwnedVehicle } from "@/lib/auth/owned-vehicle";
+import { parsePageNumber, parsePageSize } from "@/lib/security/pagination";
 import { prisma } from "@/lib/utils/db";
 import { computeKmStatusForRule } from "@/lib/utils/reminders";
 import { buildValidationError } from "@/lib/validations/errors";
@@ -30,9 +32,8 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
 
-    // Paginação padronizada (page = 1-based)
-    const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
-    const pageSize = Math.max(1, Number(searchParams.get("pageSize") ?? "10"));
+    const page = parsePageNumber(searchParams.get("page"));
+    const pageSize = parsePageSize(searchParams.get("pageSize"));
     const skip = (page - 1) * pageSize;
 
     // Filtros opcionais
@@ -131,10 +132,13 @@ export async function POST(request: Request) {
     // 1) Atualiza odômetro total do veículo (apenas se aumentar) – usa number
     //    - Nunca reduz nem zera o odômetro
     //    - Vamos calcular um "hodômetro efetivo" para usar nos lembretes
-    const currentVehicle = await prisma.vehicle.findUnique({
-      where: { id: vehicleId },
-      select: { odometerKm: true },
-    });
+    const currentVehicle = await findOwnedVehicle(session.user.id, vehicleId);
+    if (!currentVehicle) {
+      return NextResponse.json(
+        { message: "Veículo não encontrado." },
+        { status: 404 }
+      );
+    }
 
     const hasIncomingOdo =
       typeof vehicleOdometerKm !== "undefined" && vehicleOdometerKm !== null;

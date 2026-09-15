@@ -1,11 +1,18 @@
 import { prisma } from "@/lib/utils/db";
+import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import { type NextAuthOptions, getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 
+const authSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET;
+if (process.env.NODE_ENV === "production" && !authSecret) {
+  throw new Error("NEXTAUTH_SECRET (ou AUTH_SECRET) é obrigatório em produção.");
+}
+
 export const authOptions: NextAuthOptions = {
+  secret: authSecret,
   session: { strategy: "jwt" },
   adapter: PrismaAdapter(prisma),
 
@@ -15,7 +22,6 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.AUTH_GOOGLE_ID ?? "",
       clientSecret: process.env.AUTH_GOOGLE_SECRET ?? "",
-      allowDangerousEmailAccountLinking: true,
     }),
 
     CredentialsProvider({
@@ -28,6 +34,9 @@ export const authOptions: NextAuthOptions = {
         const email = credentials?.email?.trim().toLowerCase();
         const password = credentials?.password ?? "";
         if (!email || !password) return null;
+
+        const allowed = consumeRateLimit(`login:${email}`, 10, 15 * 60 * 1000);
+        if (!allowed) return null;
 
         const user = await prisma.user.findUnique({
           where: { email },
@@ -49,7 +58,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name ?? user.email,
           image: user.image ?? null,
-        } as any;
+        };
       },
     }),
   ],
@@ -57,16 +66,11 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async session({ session, token }) {
       if (session.user && token.sub) {
-        (session.user as any).id = token.sub;
+        session.user.id = token.sub;
       }
       return session;
     },
   },
 };
 
-// helper p/ server components
 export const getSession = () => getServerSession(authOptions);
-
-// ❌ REMOVIDO: não exporte handler aqui
-// const handler = NextAuth(authOptions);
-// export { handler as GET, handler as POST };

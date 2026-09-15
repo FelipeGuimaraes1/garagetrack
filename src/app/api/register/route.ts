@@ -1,28 +1,50 @@
 import { prisma } from "@/lib/utils/db";
 import { hashPassword } from "@/lib/utils/password";
+import { clientIpFromHeaders, consumeRateLimit } from "@/lib/security/rate-limit";
+import { PasswordSchema } from "@/lib/validations/password";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+
+const RegisterSchema = z.object({
+  name: z.string().trim().max(80).optional(),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Informe um e-mail válido."),
+  password: PasswordSchema,
+});
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
-  const name = String(body?.name || "").trim();
-  const email = String(body?.email || "")
-    .trim()
-    .toLowerCase();
-  const password = String(body?.password || "");
-
-  if (!email || !password) {
+  const allowed = consumeRateLimit(
+    `register:${clientIpFromHeaders(req.headers)}`,
+    5,
+    15 * 60 * 1000
+  );
+  if (!allowed) {
     return NextResponse.json(
-      { error: "E-mail e senha são obrigatórios." },
-      { status: 400 }
+      { error: "Muitas tentativas. Tente novamente em alguns minutos." },
+      { status: 429 }
     );
   }
 
+  const body = await req.json().catch(() => ({}));
+  const parsed = RegisterSchema.safeParse(body);
+  if (!parsed.success) {
+    const message =
+      parsed.error.issues[0]?.message || "Dados de cadastro inválidos.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  const { name, email, password } = parsed.data;
+
   const exists = await prisma.user.findUnique({ where: { email } });
-  if (exists)
+  if (exists) {
     return NextResponse.json(
-      { error: "E-mail já cadastrado." },
+      { error: "Não foi possível cadastrar com este e-mail." },
       { status: 409 }
     );
+  }
 
   const passwordHash = await hashPassword(password);
   await prisma.user.create({

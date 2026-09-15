@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GarageTrack
 
-## Getting Started
+App web em português para **controle pessoal de veículos**: cadastro da frota, despesas (abastecimento, manutenção, impostos, seguro, multas) com anexos, lembretes por km/data e um dashboard de gastos.
 
-First, run the development server:
+## Stack
+
+- Next.js 15 (App Router) + React 19
+- NextAuth v4 (Google + e-mail/senha com bcrypt)
+- Prisma 6 + PostgreSQL
+- Zod 4, Tailwind CSS 4
+- Cloudinary (comprovantes)
+
+## Requisitos
+
+- Node.js 18.18+
+- PostgreSQL com a extensão `citext` (`CREATE EXTENSION IF NOT EXISTS citext;`)
+
+## Configuração
+
+1. Copie [`.env.example`](.env.example) para `.env` e preencha `DATABASE_URL` e `NEXTAUTH_SECRET`.
+2. Instale e prepare o banco:
 
 ```bash
+npm install
+npx prisma migrate deploy
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Rotas principais
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Caminho | Descrição |
+| --- | --- |
+| `/` | Landing |
+| `/signin`, `/signup` | Autenticação |
+| `/dashboard` | KPIs e gráficos do mês |
+| `/vehicles` | CRUD de veículos |
+| `/expenses` | Despesas, filtros e CSV |
+| `/reminders` | Regras de manutenção/documentos |
 
-## Learn More
+## Deploy
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+O script `vercel-build` roda `prisma migrate deploy` e em seguida `next build`. Defina as mesmas variáveis do `.env.example` na Vercel. **Não rode o seed em produção.**

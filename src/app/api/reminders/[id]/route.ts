@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { authOptions } from "@/lib/auth/auth";
+import { findOwnedVehicle } from "@/lib/auth/owned-vehicle";
 import { prisma } from "@/lib/utils/db";
 import { buildValidationError } from "@/lib/validations/errors";
 import { ReminderUpdateSchema } from "@/lib/validations/reminder";
@@ -106,6 +107,19 @@ export async function PATCH(request: Request, ctx: RouteParams) {
 
     const dataToUpdate = { ...validationResult.data } as any;
     delete dataToUpdate.id;
+
+    if (typeof dataToUpdate.vehicleId === "string" && dataToUpdate.vehicleId) {
+      const ownedVehicle = await findOwnedVehicle(
+        session.user.id,
+        dataToUpdate.vehicleId
+      );
+      if (!ownedVehicle) {
+        return NextResponse.json(
+          { message: "Veículo não encontrado." },
+          { status: 404 }
+        );
+      }
+    }
 
     const prismaData: any = {};
     if (typeof dataToUpdate.vehicleId !== "undefined")

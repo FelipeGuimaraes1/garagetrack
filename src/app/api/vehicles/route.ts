@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { authOptions } from "@/lib/auth/auth";
+import { parsePageIndex, parsePageSize } from "@/lib/security/pagination";
 import { prisma } from "@/lib/utils/db";
 import { buildValidationError } from "@/lib/validations/errors";
 import { VehicleCreateSchema } from "@/lib/validations/vehicle";
@@ -19,8 +20,8 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const pageIndex = Number(searchParams.get("pageIndex") ?? "0");
-    const pageSize = Number(searchParams.get("pageSize") ?? "10");
+    const pageIndex = parsePageIndex(searchParams.get("pageIndex"));
+    const pageSize = parsePageSize(searchParams.get("pageSize"));
 
     const [vehicles, totalCount] = await Promise.all([
       prisma.vehicle.findMany({
