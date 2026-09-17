@@ -1,79 +1,284 @@
 ---
-description: Guidelines for continuously improving Cursor rules based on emerging code patterns and best practices.
+description: Guidelines for continuously improving Cursor rules based on recurring project patterns, documented decisions, and lessons learned.
 globs: **/*
 alwaysApply: true
 ---
-## Rule Improvement Triggers
 
-- New code patterns not covered by existing rules
-- Repeated similar implementations across files
-- Common error patterns that could be prevented
-- New libraries or tools being used consistently
-- Emerging best practices in the codebase
+# Continuous Improvement of Cursor Rules
 
-# Analysis Process:
-- Compare new code with existing rules
-- Identify patterns that should be standardized
-- Look for references to external documentation
-- Check for consistent error handling patterns
-- Monitor test patterns and coverage
+Cursor Rules should evolve when the GarageTrack project develops stable, recurring, and meaningful development patterns.
 
-# Rule Updates:
+Continuous improvement means observing the codebase, identifying useful patterns, and proposing deliberate improvements to project guidance.
 
-- **Add New Rules When:**
-  - A new technology/pattern is used in 3+ files
-  - Common bugs could be prevented by a rule
-  - Code reviews repeatedly mention the same feedback
-  - New security or performance patterns emerge
+Rule changes must remain consistent with the GarageTrack Constitution and must not be created solely because a pattern appears repeatedly.
 
-- **Modify Existing Rules When:**
-  - Better examples exist in the codebase
-  - Additional edge cases are discovered
-  - Related rules have been updated
-  - Implementation details have changed
+# Rule Improvement Triggers
 
-- **Example Pattern Recognition:**
+Consider a potential rule improvement when one or more of the following occur:
 
-  ```typescript
-  // If you see repeated patterns like:
-  const data = await prisma.user.findMany({
-    select: { id: true, email: true },
-    where: { status: 'ACTIVE' }
-  });
+- A recurring code pattern is consistently used across the project.
+- The same implementation problem appears repeatedly.
+- The same bug or mistake could reasonably be prevented through clearer guidance.
+- Code reviews repeatedly identify the same issue.
+- A project-wide architectural decision has been intentionally adopted.
+- A security, authorization, data-integrity, UX, accessibility, or performance pattern becomes established.
+- A major refactor changes an existing project convention.
+- A dependency or technology is intentionally adopted as part of the project's standard stack.
+- Developers repeatedly need clarification about the same project-wide behavior.
 
-  // Consider adding to [prisma.mdc](mdc:shipixen/.cursor/rules/prisma.mdc):
-  // - Standard select fields
-  // - Common where conditions
-  // - Performance optimization patterns
-  ```
+A repeated pattern is evidence for investigation, not an automatic reason to create a rule.
 
-- **Rule Quality Checks:**
-- Rules should be actionable and specific
-- Examples should come from actual code
-- References should be up to date
-- Patterns should be consistently enforced
+Do not create a rule merely because:
 
-## Continuous Improvement:
+- A pattern appears in three or more files.
+- A library is used in several files.
+- A developer used a particular implementation once or twice.
+- A temporary workaround appears repeatedly.
+- A feature-specific implementation is repeated only within that feature.
 
-- Monitor code review comments
-- Track common development questions
-- Update rules after major refactors
-- Add links to relevant documentation
-- Cross-reference related rules
+# Constitution Alignment
 
-## Rule Deprecation
+Before creating, modifying, or removing a Cursor Rule:
 
-- Mark outdated patterns as deprecated
-- Remove rules that no longer apply
-- Update references to deprecated rules
-- Document migration paths for old patterns
+1. Check the GarageTrack Constitution.
+2. Verify that the proposed rule supports its principles.
+3. Ensure that the rule does not weaken or contradict constitutional requirements.
+4. Prefer the Constitution for durable principles and Cursor Rules for practical development guidance.
 
-## Documentation Updates:
+Cursor Rules must not become an alternative Constitution.
 
-- Keep examples synchronized with code
-- Update references to external docs
-- Maintain links between related rules
-- Document breaking changes
+Do not move fundamental project principles into Cursor Rules merely to make them easier to reference.
 
-Follow [cursor-rules.mdc](mdc:.cursor/rules/curs or-rules.mdc) for proper rule formatting and structure.
+# Specification and Project Decisions
 
+Not every project decision belongs in a Cursor Rule.
+
+Use feature specifications, plans, tasks, or project documentation for decisions that are:
+
+- Specific to one feature.
+- Temporary.
+- Experimental.
+- Limited to one implementation.
+- Dependent on a particular migration or task.
+- Not yet established as a project-wide convention.
+
+Create or modify a Cursor Rule only when the guidance has value beyond the immediate implementation.
+
+For Spec Kit workflows, respect the distinction between:
+
+## Constitution
+
+Durable project principles.
+
+## Specification
+
+What the feature must do.
+
+## Plan
+
+How the feature should be implemented.
+
+## Tasks
+
+Concrete implementation steps.
+
+## Cursor Rules
+
+Recurring development guidance.
+
+Do not turn feature-specific decisions into global Cursor Rules without a clear reason.
+
+# Analysis Process
+
+When considering a potential rule improvement:
+
+1. Review the existing implementation.
+2. Compare the implementation with the current Cursor Rules.
+3. Check the GarageTrack Constitution.
+4. Check relevant specifications, plans, or documentation.
+5. Determine whether the observed pattern is intentional.
+6. Determine whether the pattern is stable enough to become project-wide guidance.
+7. Check whether an existing rule already covers the situation.
+8. Check whether the proposed rule would conflict with another rule.
+9. Prefer improving an existing rule over creating a duplicate rule.
+10. Keep the resulting rule concise, actionable, and specific.
+
+# Evidence for Rule Changes
+
+A rule should normally have a concrete reason to exist.
+
+Useful evidence includes:
+
+- Repeated code review feedback.
+- Repeated implementation errors.
+- Repeated security or authorization issues.
+- Repeated questions during development.
+- An intentional architectural decision.
+- A documented project convention.
+- A recurring maintenance problem.
+- A major refactor that establishes a new standard.
+
+Do not treat frequency alone as sufficient evidence.
+
+# Creating New Rules
+
+Create a new Cursor Rule only when:
+
+- The guidance applies to multiple areas of the project.
+- The behavior is expected to remain relevant.
+- The rule solves a recurring or meaningful problem.
+- The rule does not duplicate existing guidance.
+- The rule is compatible with the Constitution.
+- The rule can be expressed clearly and practically.
+
+Before creating a new rule, consider whether updating an existing rule would be clearer.
+
+Avoid creating rules for isolated implementation details.
+
+# Modifying Existing Rules
+
+Consider modifying an existing rule when:
+
+- The current guidance no longer matches the actual codebase.
+- A better project-wide pattern has been intentionally adopted.
+- New edge cases reveal an important missing constraint.
+- A dependency or framework version changes.
+- Related rules have become inconsistent.
+- A major architectural change affects the rule.
+
+When modifying a rule:
+
+1. Preserve valid existing guidance.
+2. Remove obsolete instructions.
+3. Update examples when necessary.
+4. Check references to related rules.
+5. Verify compatibility with the Constitution.
+6. Avoid unrelated changes.
+
+# Removing or Deprecating Rules
+
+Remove a rule when it no longer provides useful guidance.
+
+Before removing it:
+
+1. Check whether another rule depends on it.
+2. Check references and links to it.
+3. Determine whether its useful content should be moved elsewhere.
+4. Remove obsolete references.
+5. Update related documentation if necessary.
+
+If a migration requires temporary historical context, document the migration in the appropriate project documentation rather than keeping obsolete Cursor Rules indefinitely.
+
+Avoid maintaining contradictory old and new rules at the same time.
+
+# Rule Quality
+
+Good Cursor Rules should be:
+
+- Actionable.
+- Specific.
+- Relevant to the actual project.
+- Easy to understand.
+- Consistent with the Constitution.
+- Consistent with the current technology stack.
+- Supported by concrete project needs.
+- Small enough to be maintained reliably.
+
+Avoid:
+
+- Vague recommendations.
+- Generic software-development advice with no project relevance.
+- Rules that duplicate the Constitution.
+- Rules that prescribe technologies not used by the project.
+- Rules that force unnecessary abstractions.
+- Rules based solely on the number of occurrences of a pattern.
+- Rules that become outdated quickly.
+
+# Examples
+
+Examples used in rules should preferably come from patterns that actually exist in the GarageTrack codebase.
+
+When creating an example:
+
+- Keep it representative of the project's architecture.
+- Avoid copying temporary or experimental code.
+- Do not use obsolete dependencies or APIs.
+- Avoid examples that conflict with the current project versions.
+
+For example, if the project consistently scopes vehicle queries to the authenticated user, a rule may document that established security pattern.
+
+The example should explain the reusable principle rather than prescribe a single implementation for every situation.
+
+# External Documentation
+
+When a rule depends on framework or library behavior:
+
+- Prefer official documentation.
+- Keep references current.
+- Verify that referenced APIs match the dependency version used by GarageTrack.
+- Remove or update references when dependencies change.
+
+Do not introduce external documentation merely to make a rule appear more complete.
+
+# Continuous Improvement
+
+Review Cursor Rules when:
+
+- A major refactor is completed.
+- A major dependency is intentionally upgraded.
+- A recurring development problem is discovered.
+- Significant security or performance lessons are learned.
+- Code review reveals a project-wide convention that should be documented.
+- The project architecture changes intentionally.
+
+Do not modify rules after every individual feature or code change.
+
+The goal is stable guidance, not constant rule churn.
+
+# Relationship With Project Files
+
+Keep responsibilities separated:
+
+## Constitution
+
+Fundamental and durable project principles.
+
+## Cursor Rules
+
+Practical and recurring development guidance.
+
+## Spec Kit Specifications
+
+Requirements and expected behavior of a feature.
+
+## Spec Kit Plans
+
+Technical implementation approach for a feature.
+
+## Spec Kit Tasks
+
+Concrete work required to implement a feature.
+
+## README and Documentation
+
+Project setup, usage, architecture, and operational information.
+
+Do not duplicate the same information across multiple layers unless the duplication provides clear practical value.
+
+# Final Verification Before Changing Rules
+
+Before changing any Cursor Rule, verify:
+
+- Does this solve a real recurring problem?
+- Is the guidance still relevant to the current GarageTrack stack?
+- Does it agree with the Constitution?
+- Does it conflict with another rule?
+- Does an existing rule already cover it?
+- Should this decision live in a specification or documentation instead?
+- Is the rule specific enough to be actionable?
+- Will the rule remain useful as the project evolves?
+- Is the proposed change smaller and clearer than the existing guidance?
+
+When the answer to these questions is not clear, prefer not to create or modify a rule yet.
+
+Follow `cursor-rules.mdc` for the proper location, naming, and formatting of Cursor Rules.
