@@ -44,11 +44,13 @@ export function ExpenseList() {
     totalPages,
     filters,
     reload,
+    updateExpense,
     deleteExpense,
   } = useExpenses();
   const { showToast } = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const editingExpense = expenses.find((item) => item.id === editingId) ?? null;
 
   useEffect(() => {
     const off = onAppEvent("gt:expenses:changed", () => {
@@ -172,7 +174,9 @@ export function ExpenseList() {
                   </div>
                   <div className="mt-2 flex gap-2 justify-end">
                     <button
+                      type="button"
                       onClick={() => setEditingId(expense.id)}
+                      aria-label="Editar despesa"
                       className="px-3 py-1.5 rounded-lg border border-[var(--border)] hover:ring-1 hover:ring-white/5 text-sm cursor-pointer"
                     >
                       <Edit2 size={16} />
@@ -213,8 +217,9 @@ export function ExpenseList() {
 
       {/* Modal de edição */}
       <ExpenseEditModal
-        expenseId={editingId}
-        open={Boolean(editingId)}
+        expense={editingExpense}
+        open={Boolean(editingExpense)}
+        updateExpense={updateExpense}
         onClose={() => setEditingId(null)}
         onSaved={async () => {
           await reload();

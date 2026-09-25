@@ -1,189 +1,683 @@
 ---
-description:
+description: Core development, architecture, security, quality, and performance guidelines for the GarageTrack project.
 globs:
 alwaysApply: true
 ---
 
-# Use a Modular File Structure:
+# GarageTrack Development Rules
 
-Use the /app directory for routing (App Router) with Next.js 15 or version provided.
-Keep business logic separate from UI components.
-Organize your project with clear directories: /components, /hooks, /services, /lib, /styles.
+## Purpose
 
-# App Router Best Practices:
+These rules define the practical development guidelines for the GarageTrack project.
 
-Use file-based routing for cleaner code organization.
-Utilize Next.js server components for improved performance where possible.
-Keep client components focused on state management and UI interactions.
+The GarageTrack Constitution is the fundamental reference for project principles and must always take precedence over these rules.
 
-# Data Access Layer (DAL) and Services:
+These rules complement the Constitution by describing recurring development practices, conventions, architectural decisions, and implementation guidance.
 
-Avoid mixing data fetching logic directly in components.
+When working on an existing feature or area of the project, preserve its established behavior unless a deliberate change is required.
 
-# Directory Structure for DAL:
+Do not introduce architectural changes, dependency upgrades, or new technologies without a clear reason.
 
-Use a consistent folder structure for data access and actions within each page module, for example:
+---
 
-- app/
-  - dashboard/
-    - /_data-access # Data Access Layer (DAL) for dashboard page
-    - /_actions # Server actions for cadastro page
+# Architecture
 
-# Component Placement Guidelines
+## Next.js and App Router
 
-## 1. Page-Level Components
+GarageTrack uses Next.js with the App Router.
 
-- **Always check** if there is a `_components` directory at the page or route level where you are working.
-  - Example:
-    ```
-    /app
-      /dashboard
-        /_components
-        page.tsx
-    ```
-  - What to do:
-    If the component is only used within this specific page or route (e.g., only in `/dashboard`), place it inside the `/dashboard/_components` folder.
+Use the Next.js version already installed in the project unless an intentional upgrade has been decided and documented.
 
-## 2. Global or Shared Components
+Prefer Server Components by default.
 
-- If the component will be reused in multiple pages or modules, place it in the global `/src/components` directory.
-  - Only add components to `/src/components` when you're sure they will be reused broadly.
-  - If in doubt, always ask first before placing it globally.
+Use Client Components only when the component requires client-side capabilities such as:
 
-## 3. Server vs. Client Component
+- React state
+- Event handlers
+- Browser APIs
+- Effects
+- Client-only libraries
+- Interactive UI behavior
 
-- Default to Server Components (no `"use client"` directive) whenever possible.
-  - Use Client Components (`"use client"`) **only when strictly necessary** (state, effects, event handlers, etc.).
-  - If you're not sure, start as a Server Component and refactor to Client only if required.
+Do not introduce APIs or patterns that require a newer Next.js version unless upgrading the project is an intentional decision.
 
-## 4. Other Best Practices
+Keep route-specific logic close to the route when it is not genuinely reusable.
 
-- Prefer colocating components near where they're used (feature or route-level scope) unless you have a clear case for global reuse.
-- Keep component directories organized and use descriptive names.
-- Review import paths after moving or adding components to avoid breaking references.
-- **Always** name the folder as `_components` (with a leading underscore) to distinguish it from pages/routes.
+---
 
-# Reusable and Isolated Components:
+## Separation of Responsibilities
 
-Keep components small and focused on a single responsibility.
-Use props effectively and avoid excessive prop drilling by leveraging context or hooks where needed.
+Keep responsibilities separated between:
 
-# Separation of Concerns:
+- UI components
+- Validation
+- Authentication and authorization
+- Data access
+- Business rules
+- Utility functions
+- Server-side operations
 
-Avoid placing API calls or business logic inside components.
-Use hooks for state management and side effects (e.g., useSWR, React Query, custom hooks).
+Avoid placing complex business rules directly inside presentation components.
 
-# UI and State Separation:
+Components should primarily coordinate rendering and user interaction.
 
-Keep UI components presentational (no logic other than rendering).
-Use containers for data management and complex state logic.
-Code Quality
+Business rules should be kept in appropriate server-side or domain-oriented code when they need to be reused or protected from client-side manipulation.
+
+Do not create abstractions only for the sake of having more layers.
+
+Prefer simple and explicit solutions when they adequately solve the problem.
+
+---
+
+## Data Access and Services
+
+Do not create Data Access Layers or Service Layers automatically for every feature.
+
+Introduce a dedicated data-access or service abstraction when one or more of the following conditions exist:
+
+- The logic is reused by multiple parts of the application.
+- The logic contains meaningful business rules.
+- The implementation is becoming difficult to maintain inside a route or action.
+- The abstraction creates a clear separation of responsibilities.
+- The abstraction makes testing or future evolution meaningfully easier.
+
+Do not create folders or layers merely because a theoretical architecture recommends them.
+
+Follow the architecture already established in the project unless there is a concrete reason to evolve it.
+
+---
+
+## Server Actions
+
+Server Actions may be used for mutations when they provide a clear benefit.
+
+When using Server Actions:
+
+- Validate all external input on the server.
+- Perform authentication checks on the server.
+- Perform authorization and ownership checks on the server.
+- Keep the action focused on its responsibility.
+- Avoid placing large amounts of unrelated business logic inside the action.
+
+Do not introduce Server Actions solely to replace an existing route handler when the existing approach is already appropriate.
+
+---
+
+# Component Organization
+
+## Route-Specific Components
+
+Components that are used exclusively by one route should normally remain close to that route.
+
+Use route-level component folders when they improve organization and maintainability.
+
+Do not move a component to the shared component directory simply because it could theoretically be reused.
+
+---
+
+## Shared Components
+
+Use shared components when the component represents a genuinely reusable UI or behavior pattern.
+
+Shared components should have a clear responsibility.
+
+Avoid creating generic components that exist only to wrap another component without providing meaningful value.
+
+---
+
+## Component Design
+
+Prefer focused components with clear responsibilities.
+
+Avoid unnecessarily large components that contain:
+
+- Complex business rules
+- Large amounts of data transformation
+- Multiple unrelated UI responsibilities
+- Repeated validation logic
+- Repeated database logic
+
+Refactor large components when doing so meaningfully improves readability, testing, reuse, or maintainability.
+
+Do not refactor merely because a component has a certain number of lines.
+
+---
+
+# Server State and Client State
+
+Prefer server-side data fetching when the data belongs to the server or database.
+
+Use local React state for temporary interface state such as:
+
+- Open or closed dialogs
+- Selected items
+- Form interaction
+- Temporary UI states
+
+Use URL query parameters for state that should be:
+
+- Shareable
+- Bookmarkable
+- Preserved during navigation
+- Represented by filters or sorting
+
+Do not introduce global state management unless the application has a real need for it.
+
+Do not introduce libraries such as SWR or React Query unless their adoption is an intentional project decision justified by the application's requirements.
+
+---
 
 # UI and Styling
 
-Component Libraries
+Use the project's existing UI and styling conventions.
 
-- Use Shadcn UI for consistent, accessible component design.
-- Integrate Radix UI primitives for customizable, accessible UI elements.
-- Apply composition patterns to create modular, reusable components.
+GarageTrack uses Tailwind CSS and the existing component system.
 
-# TypeScript First:
+Prefer existing components and patterns before creating new ones.
 
-Use TypeScript to ensure type safety across the application.
-Define strict types for props, state, and API responses.
+Use shadcn/ui and Radix-based components when they are already part of the project's established UI approach and are appropriate for the problem.
 
-# Clean Code Principles:
+Do not introduce another UI library without a clear reason.
 
-Follow SOLID principles where applicable.
-Use meaningful variable names and avoid magic numbers.
-Prefer functional components and hooks over class components.
+Avoid creating visually inconsistent components when an existing project component already solves the same problem.
 
-# Avoid Anti-Patterns:
+---
 
-No large, monolithic components.
-Avoid inline styles in favor of TailwindCSS or modular CSS.
-Performance Optimization
+# UX and Accessibility
 
-# Code Splitting and Lazy Loading:
+User experience and accessibility are fundamental project requirements.
 
-Use dynamic imports for large components to improve load times.
-Optimize for faster Time to Interactive (TTI).
+Interfaces should provide clear states for:
 
-# Server Components
+- Loading
+- Empty results
+- Errors
+- Successful operations
+- Validation failures
+- Destructive actions
+- Confirmation flows
 
-- Default to Server Components
-- Use URL query parameters for data fetching and server state management
-- Use 'use client' directive only when necessary:
-- Event listeners
-- Browser APIs
-- State management
-- Client-side-only libraries
+Interactive elements should have appropriate:
 
-# Specific Naming Patterns
+- Labels
+- Semantic HTML
+- Keyboard behavior
+- Focus states
+- Accessible names
+- Error feedback
 
-- Prefix event handlers with 'handle': handleClick, handleSubmit
-- Prefix boolean variables with verbs: isLoading, hasError, canSubmit
-- Prefix custom hooks with 'use': useAuth, useForm
-- Use complete words over abbreviations except for:
-- err (error)
-- req (request)
-- res (response)
-- props (properties)
-- ref (reference)
+Do not rely exclusively on color to communicate important information.
 
-# Testing Strategy:
+Maintain the existing visual language of the application.
 
-Use Jest and React Testing Library for unit and integration tests.
-Aim for high test coverage on critical components and services.
+Use Brazilian Portuguese for user-facing messages unless there is an intentional product decision to use another language.
 
-# Documentation:
+Use Brazilian conventions for:
 
-Use JSDoc or TypeScript comments to describe component props and functions.
-Keep README files updated for each module or library used.
-Security and Best Practices
+- Dates
+- Times
+- Currency
+- Number formatting
 
-# Environment Variables:
+---
 
-Use .env files for secrets and configuration.
-Never expose sensitive keys in the frontend.
+# TypeScript
 
-# Input Validation and Sanitization:
+Use TypeScript with strict type checking.
 
-Use Zod for schema validation to prevent bad data.
-Sanitize all inputs to prevent XSS and SQL injection.
+Prefer type-safe solutions over type assertions.
 
-# Authentication and Authorization:
+Avoid `any` unless there is a specific and documented reason.
 
-Use AuthJS 5 for manage autentication.
-Implement CSRF protection and secure cookies.
-Deployment and Scalability
+Use explicit types when they improve readability or when TypeScript cannot correctly infer the intended type.
 
-# Optimized Build Process:
+Do not add unnecessary types when inference is already clear and reliable.
 
-Use the latest Next.js features for optimized builds.
-Leverage Vercel or a VPS with good caching strategies.
+---
 
-# Logging and Error Handling:
+# Naming Conventions
 
-Use tools like Sentry for error tracking and performance monitoring.
-Implement graceful error handling with fallback components.
+Use descriptive names.
 
-# Scaling Strategies:
+Prefer complete words over unexplained abbreviations.
 
-Plan for horizontal scaling with serverless or containerized deployments.
-Optimize database queries with Prisma or Drizzle for efficient data access.
-Continuous Improvement
+Examples of preferred names include:
 
-# Code Reviews and PR Guidelines:
+- `vehicleId`
+- `expenseAmount`
+- `selectedVehicle`
+- `handleSubmit`
+- `isLoading`
+- `hasError`
+- `canSubmit`
 
-Set clear code review guidelines to catch issues early.
-Use pull request templates to ensure consistency.
+Use `handle` for event-handler functions when appropriate.
 
-# Performance Audits:
+Use prefixes such as:
 
-Regularly run Lighthouse and Web Vitals checks.
-Use performance monitoring tools to track improvements.
+- `is` for boolean state
+- `has` for boolean presence or possession
+- `can` for permissions or capabilities
+- `should` for boolean conditions or decisions
 
-# Stay Up-to-Date:
+Custom React hooks should normally use the `use` prefix.
 
-Keep dependencies updated and stay aware of breaking changes in major libraries like Next.js, React, and Prisma. If a specific version is provided for a library, always use the given version to ensure compatibility and avoid unexpected behavior.
+Follow established framework and library naming conventions when they are more appropriate than project-specific conventions.
+
+---
+
+# Code Quality
+
+Prefer simple, readable, maintainable code.
+
+Apply SOLID principles when they improve the design.
+
+Do not apply abstractions merely to satisfy a theoretical principle.
+
+Functions should have focused responsibilities.
+
+Avoid unnecessary duplication of business rules.
+
+When the same business rule is genuinely shared across multiple areas, consider extracting it into an appropriate reusable implementation.
+
+Avoid magic numbers and unexplained constants.
+
+Remove unused variables, imports, functions, and components.
+
+Prefer functional React patterns and immutable state updates where appropriate.
+
+---
+
+# Validation and Data Integrity
+
+Use Zod for application-level input validation where appropriate.
+
+Validate external input on the server.
+
+Client-side validation may improve user experience, but it must never be considered a replacement for server-side validation.
+
+Validation messages should be understandable to users.
+
+Maintain type safety between validated input and the code that consumes it.
+
+Use database constraints to enforce important data-integrity requirements whenever appropriate.
+
+Monetary values must use decimal-safe representations.
+
+Do not use floating-point arithmetic for financial calculations when it can introduce precision problems.
+
+Apply conditional validation when fields depend on other fields.
+
+---
+
+# Authentication and Authorization
+
+Authentication and authorization are separate responsibilities.
+
+Authentication determines whether the user is signed in.
+
+Authorization determines whether the authenticated user is allowed to access or modify a resource.
+
+GarageTrack uses NextAuth.js version 4.
+
+Do not migrate to Auth.js version 5 unless that migration is an intentional project decision.
+
+Preserve the existing authentication architecture unless there is a clear reason to change it.
+
+Every protected operation must verify the authenticated user.
+
+Resource ownership must be verified independently of the resource identifier supplied by the client.
+
+Never assume that possession of a valid database ID means the user is authorized to access the resource.
+
+Whenever possible, scope database queries directly to the authenticated user's identifier.
+
+---
+
+# Security
+
+Never expose secrets or private credentials to client-side code.
+
+Never hardcode secrets in source code.
+
+Use environment variables for sensitive configuration.
+
+Treat all client-provided values as untrusted.
+
+Validate:
+
+- IDs
+- Text
+- URLs
+- File metadata
+- Query parameters
+- Form data
+- Request bodies
+
+Use Prisma's parameterized database access patterns.
+
+Avoid raw SQL involving untrusted input.
+
+Preserve restrictions already established for external resources and uploaded files.
+
+Apply rate limiting to sensitive endpoints when appropriate.
+
+Do not introduce a custom authentication or CSRF mechanism when the existing framework and architecture already provide the required protection.
+
+If additional CSRF protection is required by a specific architecture or integration, implement it deliberately and document the reason.
+
+---
+
+# Database
+
+GarageTrack uses Prisma with PostgreSQL.
+
+Use the Prisma version already installed in the project unless an intentional upgrade has been decided.
+
+Do not introduce Drizzle or another ORM without an explicit architectural decision.
+
+Database operations involving user-owned resources should normally include the authenticated user's ownership scope.
+
+Select only the fields required by the operation when doing so meaningfully reduces unnecessary data retrieval.
+
+Use pagination for potentially large collections.
+
+Use appropriate database constraints and indexes when they protect integrity or improve important query patterns.
+
+Handle expected Prisma errors explicitly when the application can provide a useful response.
+
+Do not silently ignore database errors.
+
+---
+
+# GarageTrack Domain Rules
+
+GarageTrack manages vehicles, expenses, reminders, attachments, and related automotive information.
+
+Business logic must preserve the integrity of the vehicle's history.
+
+Do not silently alter historical records when performing operations that are expected to preserve history.
+
+Consider existing data and relationships before changing a domain entity.
+
+---
+
+## Odometer
+
+The vehicle odometer represents the vehicle's accumulated mileage.
+
+Under normal operations, the odometer should not decrease.
+
+Any workflow that intentionally allows an odometer correction must explicitly define how that correction is handled.
+
+Do not bypass odometer-related business rules merely because the database accepts the value.
+
+---
+
+## Expenses
+
+Expenses belong to a vehicle and an authenticated user.
+
+Expense-related operations must preserve ownership and vehicle relationships.
+
+Expense values must use decimal-safe monetary handling.
+
+Conditional expense fields must follow the application's validation and business rules.
+
+Attachments must follow the security and validation restrictions already established by the project.
+
+---
+
+## Reminders
+
+Reminder configuration, reminder execution history, and reminder due state are distinct concepts.
+
+Do not confuse:
+
+- Reminder configuration
+- Last execution
+- Current due condition
+- Warning thresholds
+
+Changes to reminder rules must preserve existing domain behavior unless the feature explicitly changes that behavior.
+
+---
+
+## Historical Data
+
+Avoid silently modifying historical information.
+
+When a feature changes data that may represent historical vehicle activity, consider:
+
+- Existing records
+- Relationships
+- Aggregated values
+- Reminder calculations
+- Odometer calculations
+- Attachments
+- User expectations
+
+Any change that can affect historical interpretation should be deliberate and documented when necessary.
+
+---
+
+# Performance
+
+Prefer Server Components when client-side behavior is not required.
+
+Avoid unnecessary client-side state and effects.
+
+Use pagination for potentially large lists.
+
+Respect existing limits for:
+
+- List queries
+- Exports
+- File operations
+- Database operations
+
+Retrieve only the data required by the operation.
+
+Avoid unnecessary database queries.
+
+Avoid fetching the same data repeatedly when the architecture already provides an appropriate way to reuse it.
+
+Use dynamic imports only when they provide a clear benefit, such as reducing initial client-side JavaScript or loading a genuinely heavy optional feature.
+
+Do not perform premature optimization.
+
+Optimize measurable or clearly identifiable bottlenecks rather than hypothetical ones.
+
+---
+
+# Performance Monitoring
+
+Use Lighthouse and Core Web Vitals when performance evaluation is relevant.
+
+Investigate real performance bottlenecks before introducing additional infrastructure.
+
+Do not introduce a monitoring service solely because a development rule recommends it.
+
+If a monitoring service is intentionally adopted, follow its established project configuration.
+
+---
+
+# Error Handling
+
+Handle expected errors explicitly.
+
+User-facing errors should provide useful and understandable feedback.
+
+Do not expose sensitive implementation details, stack traces, secrets, or internal infrastructure information to users.
+
+Provide appropriate UI states for failed operations.
+
+Follow the error-handling patterns already established in the project.
+
+Use configured monitoring when it exists and is appropriate.
+
+Do not introduce Sentry or another monitoring service without an explicit project decision.
+
+---
+
+# Testing
+
+Automated tests should be added when they provide meaningful protection against regressions.
+
+Prioritize testing for areas with higher risk, including:
+
+- Authentication
+- Authorization
+- Ownership checks
+- Business rules
+- Validation
+- Data transformations
+- Critical user flows
+
+Use the testing tools already adopted by the project.
+
+Do not assume that Jest, React Testing Library, Vitest, Playwright, or another testing framework is installed.
+
+Introducing a new testing framework should be an intentional decision based on project needs.
+
+Manual testing is also appropriate when it provides efficient validation for UI behavior or flows that are difficult to cover automatically.
+
+---
+
+# Documentation and Comments
+
+Keep project documentation synchronized with meaningful changes.
+
+Update the README or relevant documentation when changes affect:
+
+- Setup
+- Environment variables
+- Architecture
+- Important workflows
+- Deployment
+- Development commands
+- Project behavior
+
+Use comments or JSDoc when the behavior is not obvious from the code itself.
+
+Comments are especially useful for:
+
+- Complex business rules
+- Security decisions
+- Non-obvious architectural decisions
+- Workarounds
+- Complex algorithms
+- Important constraints
+
+Do not add comments that merely restate obvious code.
+
+---
+
+# Dependencies
+
+Preserve the versions of installed dependencies unless an intentional upgrade is being performed.
+
+Do not perform unrelated dependency upgrades while implementing a feature.
+
+Before introducing a new dependency, consider:
+
+- Whether the project already provides the required capability
+- Maintenance quality
+- Compatibility with the current stack
+- Bundle size
+- Security implications
+- Long-term maintenance cost
+- Whether the dependency solves a meaningful problem
+
+Do not introduce a library merely because it is popular or considered modern.
+
+---
+
+# Deployment
+
+Follow the deployment platform and architecture already adopted by the project.
+
+Do not assume that the application must run on Vercel, a VPS, serverless infrastructure, containers, or another deployment model unless that is actually part of the project requirements.
+
+Avoid introducing deployment-specific architecture without a concrete requirement.
+
+---
+
+# Continuous Quality
+
+Before changing an existing area of the application:
+
+1. Review the current implementation.
+2. Identify existing conventions.
+3. Check related components and APIs.
+4. Check relevant validation and business rules.
+5. Consider authentication and ownership implications.
+6. Consider UX and accessibility implications.
+7. Avoid unrelated refactoring.
+
+Prefer focused and incremental changes.
+
+Preserve existing functionality unless the requested feature explicitly changes it.
+
+Consider the impact of changes across related areas of the application.
+
+---
+
+# Technology Adoption
+
+Before adopting a new technology, library, architecture, or pattern:
+
+1. Identify the concrete problem it solves.
+2. Verify whether the existing stack already solves the problem.
+3. Consider compatibility with the current project.
+4. Consider maintenance and complexity.
+5. Consider security and performance implications.
+6. Check whether the change affects existing architecture.
+7. Document the decision when it has project-wide consequences.
+
+Do not adopt new technology solely because it is newer.
+
+---
+
+# Rule Priority
+
+When multiple sources of guidance apply, use the following order:
+
+1. GarageTrack Constitution
+2. Intentional project architecture and established dependency versions
+3. Applicable Cursor Rules
+4. Feature-specific specifications, plans, and tasks
+5. The simplest implementation that satisfies the requirements
+
+Feature-specific specifications and plans define the requirements and technical approach for their feature, but they must not intentionally weaken fundamental requirements from the Constitution, especially regarding:
+
+- Security
+- Authorization
+- Data integrity
+- Automotive domain integrity
+- UX
+- Accessibility
+
+If an intentional deviation from an established rule is required, make the deviation explicit and document the reason when appropriate.
+
+A lower-priority rule must never be used to justify weakening a higher-priority security, authorization, data-integrity, domain, UX, or accessibility requirement.
+
+---
+
+# Final Principle
+
+Prefer solutions that are:
+
+- Secure
+- Correct
+- Understandable
+- Consistent with GarageTrack
+- Accessible
+- Maintainable
+- Proportionate to the problem
+
+Do not add complexity simply because it is technically possible.
+
+Do not remove necessary safeguards simply because a simpler implementation is faster.
+
+The goal is to evolve GarageTrack incrementally while preserving its integrity and established user experience.
