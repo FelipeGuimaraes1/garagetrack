@@ -1,0 +1,231 @@
+openapi: 3.0.3
+info:
+  title: GarageTrack Expense Update
+  version: 1.0.0
+  description: >
+    Contrato da edição de despesa existente. Autenticação por sessão NextAuth (cookie).
+    Anexos não são criados, substituídos nem removidos neste endpoint.
+    Ver data-model.md para regras de odômetro e tipo resultante.
+
+servers:
+  - url: /
+
+paths:
+  /api/expenses/{id}:
+    patch:
+      operationId: updateExpense
+      summary: Atualizar despesa própria
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpenseUpdateRequest"
+      responses:
+        "200":
+          description: Despesa atualizada; anexos existentes incluídos e inalterados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseUpdateResponse"
+        "401":
+          description: Não autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+              example:
+                message: Não autenticado.
+        "404":
+          description: >
+            Despesa inexistente, de outro usuário, ou veículo alvo não pertencente
+            ao autenticado. Não distinguir existência para terceiros.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+              examples:
+                expense:
+                  value:
+                    message: Despesa não encontrada.
+                vehicle:
+                  value:
+                    message: Veículo não encontrado.
+        "422":
+          description: Validação de negócio (Zod)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "500":
+          description: Falha inesperada; dados anteriores preservados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+              example:
+                message: Erro ao atualizar despesa.
+
+components:
+  schemas:
+    ExpenseUpdateRequest:
+      type: object
+      additionalProperties: false
+      description: >
+        Campos de negócio do cadastro, todos opcionais no PATCH.
+        `attachments` não é aceito. `vehicleOdometerKm` não é coluna de Expense.
+      properties:
+        vehicleId:
+          type: string
+          format: uuid
+        type:
+          $ref: "#/components/schemas/ExpenseType"
+        status:
+          $ref: "#/components/schemas/ExpenseStatus"
+        dateISO:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+        amount:
+          type: string
+          description: Decimal string, no máximo 2 casas
+        description:
+          type: string
+          minLength: 2
+          maxLength: 300
+        km:
+          type: string
+          description: Km da despesa; decimal string opcional
+        vehicleOdometerKm:
+          type: string
+          description: >
+            Odômetro total do veículo (opcional). Só avança Vehicle.odometerKm
+            se maior que o atual. Menor ou igual não bloqueia o save.
+        fuelLiters:
+          type: string
+        pricePerLiter:
+          type: string
+        fuelType:
+          $ref: "#/components/schemas/FuelType"
+        station:
+          type: string
+          maxLength: 120
+
+    ExpenseUpdateResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Expense"
+
+    Expense:
+      type: object
+      required:
+        - id
+        - userId
+        - vehicleId
+        - type
+        - status
+        - date
+        - amount
+        - description
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        type:
+          $ref: "#/components/schemas/ExpenseType"
+        status:
+          $ref: "#/components/schemas/ExpenseStatus"
+        date:
+          type: string
+          format: date
+        amount:
+          description: Prisma.Decimal serializado
+        description:
+          type: string
+        km: {}
+        fuelLiters: {}
+        pricePerLiter: {}
+        fuelType:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/FuelType"
+        station:
+          type: string
+          nullable: true
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpenseAttachment"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ExpenseAttachment:
+      type: object
+      required: [id, url]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        contentType:
+          type: string
+          nullable: true
+        size:
+          type: integer
+          nullable: true
+
+    ExpenseType:
+      type: string
+      enum: [ABASTECIMENTO, MANUTENCAO, IMPOSTO, SEGURO, MULTA, OUTRO]
+
+    ExpenseStatus:
+      type: string
+      enum: [PENDENTE, PAGO]
+
+    FuelType:
+      type: string
+      enum: [GASOLINA, ETANOL, DIESEL, GNV]
+
+    ErrorMessage:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    ValidationError:
+      type: object
+      required: [message, issues]
+      properties:
+        message:
+          type: string
+        issues:
+          type: array
+          items:
+            type: object
+            required: [path, message]
+            properties:
+              path:
+                type: string
+              message:
+                type: string

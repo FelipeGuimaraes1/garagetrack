@@ -86,9 +86,87 @@ export const ExpenseCreateSchema = z
     }
   );
 
-export const ExpenseUpdateSchema = ExpenseCreateSchema.partial().extend({
-  id: z
-    .string()
-    .uuid("O identificador da despesa deve ser um UUID válido.")
-    .optional(),
-});
+export const ABASTECIMENTO_FUEL_MESSAGES = {
+  fuelLiters: "Informe os litros abastecidos.",
+  pricePerLiter: "Informe o preço por litro.",
+  fuelType: "Informe o tipo de combustível.",
+} as const;
+
+export type AbastecimentoFuelIssue = {
+  path: "fuelLiters" | "pricePerLiter" | "fuelType";
+  message: string;
+};
+
+/** Campos obrigatórios quando o tipo resultante é ABASTECIMENTO. */
+export function abastecimentoFuelIssues(fields: {
+  fuelLiters?: unknown;
+  pricePerLiter?: unknown;
+  fuelType?: unknown;
+}): AbastecimentoFuelIssue[] {
+  const issues: AbastecimentoFuelIssue[] = [];
+  if (fields.fuelLiters == null || fields.fuelLiters === "") {
+    issues.push({
+      path: "fuelLiters",
+      message: ABASTECIMENTO_FUEL_MESSAGES.fuelLiters,
+    });
+  }
+  if (fields.pricePerLiter == null || fields.pricePerLiter === "") {
+    issues.push({
+      path: "pricePerLiter",
+      message: ABASTECIMENTO_FUEL_MESSAGES.pricePerLiter,
+    });
+  }
+  if (fields.fuelType == null || fields.fuelType === "") {
+    issues.push({
+      path: "fuelType",
+      message: ABASTECIMENTO_FUEL_MESSAGES.fuelType,
+    });
+  }
+  return issues;
+}
+
+export const ExpenseUpdateSchema = z
+  .object({
+    vehicleId: z
+      .string()
+      .uuid("O identificador do veículo deve ser um UUID válido.")
+      .optional(),
+
+    type: z.nativeEnum(ExpenseType).optional(),
+
+    status: z.nativeEnum(ExpenseStatus).optional(),
+
+    dateISO: ISODateOnlySchema.optional(),
+
+    amount: DecimalStringSchema.optional(),
+
+    description: z
+      .string()
+      .min(2, "A descrição deve ter pelo menos 2 caracteres.")
+      .max(300, "A descrição deve ter no máximo 300 caracteres.")
+      .optional(),
+
+    km: DecimalStringSchema.nullable().optional(),
+
+    /** Odômetro total do veículo. Opcional na edição; não reduz o valor atual. */
+    vehicleOdometerKm: DecimalStringSchema.optional(),
+
+    fuelLiters: DecimalStringSchema.optional(),
+    pricePerLiter: DecimalStringSchema.optional(),
+    fuelType: z.nativeEnum(FuelType).optional(),
+    station: z
+      .string()
+      .max(120, "O nome do posto deve ter no máximo 120 caracteres.")
+      .nullable()
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type !== "ABASTECIMENTO") return;
+    for (const issue of abastecimentoFuelIssues(data)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [issue.path],
+        message: issue.message,
+      });
+    }
+  });
